@@ -3,7 +3,8 @@
  * Pure and deterministic: same inputs → same outfits. No I/O.
  */
 import type { DayWindow, Forecast, Item, Outfit, Thermal, WindowSummary } from '../types';
-import { harmonyPenalty } from './color';
+import { styleScore } from './style';
+import { tasteScore, type Taste } from './taste';
 
 export const RAIN_THRESHOLD = 50; // % probability
 const HOT = 27; // feels-like °C: no warm mid/outer layers
@@ -59,6 +60,10 @@ export interface EngineContext {
   today: string; // ISO date
   pairWeights?: Record<string, number>;
   recentOutfits?: string[]; // signatures worn in last 7 days
+  taste?: Taste;
+  prior?: Taste;
+  /** How many taste signals this person has given; fades the community prior. */
+  evidence?: number;
 }
 
 export const signature = (items: Item[]) => items.map((i) => i.id).sort().join('+');
@@ -118,12 +123,13 @@ function penalty(items: Item[], ctx: EngineContext, hasOuterAvailable: boolean):
   const spread = Math.max(...f) - Math.min(...f);
   if (spread > 1) p += (spread - 1) * 4;
 
-  // Colour
-  p += harmonyPenalty(items.map((i) => i.color));
+  // Style: colour scheme, contrast and the stylist rule table (style.ts, rules.ts)
+  const st = styleScore(items);
+  p -= st.score * 1.5;
 
   // Recency and repeats
   for (const i of items) {
-    if (!i.lastWorn) continue;
+    if (!i.lastWorn || i.lastWorn >= ctx.today) continue; // chosen today: not a repeat
     const d = daysBetween(i.lastWorn, ctx.today);
     if (d <= 1) p += 5;
     else if (d <= 3) p += 2;
@@ -135,6 +141,10 @@ function penalty(items: Item[], ctx: EngineContext, hasOuterAvailable: boolean):
     for (let a = 0; a < items.length; a++)
       for (let b = a + 1; b < items.length; b++)
         p -= (ctx.pairWeights[pairKey(items[a].id, items[b].id)] ?? 0) * 4;
+  }
+  if (ctx.taste || ctx.prior) {
+    const z = tasteScore(st.features, ctx.taste ?? {}, ctx.prior, ctx.evidence ?? 0);
+    p -= Math.max(-4, Math.min(4, z)) * 3;
   }
   return p;
 }
@@ -247,7 +257,10 @@ function notesFor(items: Item[], ctx: EngineContext): string[] {
 export function build(items: Item[], ctx: EngineContext, penaltyValue: number): Outfit {
   const sorted = sortSlots(items);
   const layer = layerHours(sorted, ctx.summary);
+  const st = styleScore(sorted);
   return {
+    style: st.reasons,
+    features: st.features,
     items: sorted,
     score: Math.round(100 - penaltyValue),
     layerHours: layer,
@@ -273,6 +286,24 @@ export function pick(ctx: EngineContext, opts: { exclude?: string[]; locked?: st
   const heroIds = new Set(hero.items.map((i) => i.id));
   const b = ranked.find((c) => c !== hero && c.items.filter((i) => heroIds.has(i.id)).length <= 1);
   return { hero: build(hero.items, ctx, hero.penalty), planB: b ? build(b.items, ctx, b.penalty) : null };
+}
+
+/**
+ * A short deck of distinct looks, best first. Each new look shares at most two pieces with any
+ * look already in the deck (plus whatever the person has kept), so swiping shows real alternatives.
+ */
+export function pickLooks(ctx: EngineContext, opts: { exclude?: string[]; locked?: string[]; n?: number } = {}): Outfit[] {
+  const locked = opts.locked ?? [];
+  const ranked = rankOutfits(ctx).filter(
+    (c) => !(opts.exclude ?? []).includes(signature(c.items)) && locked.every((id) => c.items.some((i) => i.id === id)),
+  );
+  const chosen: typeof ranked = [];
+  const allow = 2 + locked.length;
+  for (const c of ranked) {
+    if (chosen.length >= (opts.n ?? 6)) break;
+    if (chosen.every((o) => c.items.filter((i) => o.items.some((j) => j.id === i.id)).length <= allow)) chosen.push(c);
+  }
+  return chosen.map((c) => build(c.items, ctx, c.penalty));
 }
 
 /** What's missing before any outfit is possible. */

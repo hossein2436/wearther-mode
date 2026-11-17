@@ -77,6 +77,8 @@ export const api = {
   pushKey: () => call<{ publicKey: string }>('GET', '/api/push/key'),
   pushSubscribe: (body: Record<string, unknown>) => call<{ ok: true }>('POST', '/api/push/subscribe', body),
   pushUnsubscribe: () => call<{ ok: true }>('DELETE', '/api/push/subscribe', {}),
+  tastePrior: () => call<{ weights: Record<string, number> }>('GET', '/api/taste/prior'),
+  sendTaste: (events: { f: string[]; y: 1 | -1 }[]) => call<{ ok: true }>('POST', '/api/taste', { events }),
   checkout: (plan: 'month' | 'year') => call<{ url: string }>('POST', '/api/billing/checkout', { plan }),
 };
 

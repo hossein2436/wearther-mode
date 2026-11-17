@@ -68,10 +68,50 @@ Today it is **rules, not taste**. Each candidate outfit is scored on:
 - Polyvore is gone (acquired by SSENSE, image URLs dead).
 - The datasets ship under research or unclear licences, so they are risky for a paid product.
 
-**Upgrade path (in order)**
+**Upgrade path (in order)** — steps 1–3 are now built, see §5.
 1. Score lightness and saturation contrast, not only hue. Hue-only harmony is a known limitation.
 2. A short, stylist-written rule table: shoe/trouser formality, pattern mixing, one statement piece.
 3. Learn from our own users' opt-in 👍/👎 data, a model trained on what our users actually wear.
 4. Optional: a vision model reviews the flat-lay before showing it.
 
 Sources: fashn.ai pricing and changelog, fashn.ai open-source VTON comparison, Replicate IDM-VTON page, Hugging Face OOTDiffusion discussion, Google Cloud Virtual Try-On docs, getmaxim.ai and futureagi model trackers, Huang et al. 2017 "Color Harmony in Two-piece Garments" (Color Res. & App.), Han et al. 2017 Polyvore dataset (github.com/xthan/polyvore-dataset), Vasileva et al. 2018 (arXiv 1803.09196).
+
+## 5. Style engine v2 (built, 17 Nov 2026)
+`src/engine/style.ts`, `rules.ts` and `taste.ts`, with tests in `src/engine/__tests__/style.test.ts`.
+
+1. **Perceptual colour.**
+   - Colours are converted to OKLCH (OKLab), not HSL. Every garment gets a stylist's colour family. Navy, denim, camel, brown, olive, black, white and grey count as neutrals.
+   - Each look gets a **scheme**: neutral, tonal, neutral plus one colour, analogous, complementary, triadic or clash.
+   - It also gets a **lightness contrast** (low, mid or high) between the upper body and legs, and a count of **loud** pieces (high chroma).
+2. **Stylist rule table.**
+   - Declarative rules, each with a weight and a human reason. Examples:
+     - neutral base with one colour
+     - tonal looks
+     - softened complementary colours
+     - clash
+     - at most one loud piece
+     - darker on the bottom grounds it
+     - shoes echo the top
+     - shoes at the same dress level
+     - shoes at least as dark as the trousers in smart looks
+     - boots with shorts
+     - hoodie under a blazer
+     - denim on denim without contrast
+     - one smart piece lifts a casual look
+     - one pattern at a time
+   - Patterns are a new optional tag.
+   - The best reason is shown on the look card ("Neutral base, blue as the one colour").
+3. **Learned taste.**
+   - An online logistic model over anonymous look features: scheme, contrast, dress level, accent families, family pairs, kinds and the rules that fired.
+   - The signals and their strength:
+     - wear: strong yes
+     - love: strongest yes
+     - swipe-away: weak no
+     - dislike: strong no
+   - Weights are bounded. Settings shows "What we've learned" and can reset it.
+4. **Community prior (opt-in, off by default).**
+   - If the person turns on "Help improve picks for everyone", their anonymous feature lists and yes/no labels are sent in batches.
+   - The server stores only counts per feature: no user id, no items, names or photos (`taste_stats`; tested).
+   - `GET /api/taste/prior` returns weights for features seen at least 20 times.
+   - New users start from that prior. It fades to 20% weight as their own signals grow.
+5. **Not built:** the vision-model review, because it needs a paid API and your approval.

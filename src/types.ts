@@ -7,6 +7,8 @@ export type GarmentKind =
   | 'dress'
   | 'sneakers' | 'boots' | 'loafers' | 'sandals';
 
+export type Pattern = 'solid' | 'stripes' | 'check' | 'print';
+
 export type ItemStatus = 'available' | 'wash' | 'stored';
 
 export interface Item {
@@ -23,6 +25,8 @@ export interface Item {
   formality: number;
   waterproof?: boolean;
   keepOutOfRain?: boolean;
+  /** Optional; plain when unset. */
+  pattern?: Pattern;
   status: ItemStatus;
   wearCount: number;
   /** ISO date of last wear. */
@@ -77,4 +81,8 @@ export interface Outfit {
   /** Hours (inclusive) the removable outer layer is needed. */
   layerHours: [number, number] | null;
   notes: string[];
+  /** Up to two short reasons the pieces go together (style engine). */
+  style: string[];
+  /** Anonymous look features, for learning taste. */
+  features: string[];
 }

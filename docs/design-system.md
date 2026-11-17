@@ -1,93 +1,106 @@
-# Wearther Mode: Design System (Phase 2)
+# Wearther Mode: Design System v2, "Dressed by the sky"
 
-## Concept: "the day, worn"
-Weather apps give you a number. Closet apps give you a grid. Wearther Mode puts **your day's weather** and **your own clothes** on the same screen, and only one element gets to be loud: the **Day Ribbon**.
-- The Day Ribbon is a horizontal band covering the hours between leaving home and getting back, coloured by feels-like temperature.
-- Rain is marked where it falls.
-- The removable layer is shown spanning the hours you'll need it.
+_v2, 17 Nov 2026. Replaces the v1 "Day Ribbon" system. Screens: `docs/screens/v2/`._
 
-Everything else stays quiet: fog background, slate ink, and clothing cutouts on plain white tiles, so the photos are the hero.
+## Concept
+Weather apps give you a number; closet apps give you a grid. Wearther Mode v2 makes **the day's own sky the screen**.
+- **The sky:** on Today, the background is a vertical gradient of the feels-like temperature, from the hour you leave (top) to the hour you're back (bottom).
+- **The deck:** your clothes sit on that sky as a styled flat-lay in a swipeable deck.
+- **The rail:** a thin hour rail beside the deck marks the rain and when the coat is on.
 
-### Plan review against the brief (what I changed and why)
-- **First idea:** a sky-gradient hero, like a generic weather app. **Rejected:** decorative, and it's what every forecast app does. **Revised to:** a gradient that *is data*. Colour stops come from the hourly feels-like temperature of *your* window, so the colour means something.
-- **First idea:** a cream background with a serif display. **Rejected:** that's a common AI default and has nothing to do with weather. **Revised to:** cool "overcast" fog and a grotesk with strong numerals. Temperatures are the main typography.
-- **First idea:** cards for everything. **Revised to:** outfit pieces are cutouts on one flat-lay surface. Cards are used only where something can be acted on as a unit (tag-confirm card, check-in card).
-- **Meta strings** like "Thu · Tehran · 12°" were replaced with plain sentences ("Thursday 18 November in Lisbon").
+One element is loud, the sky. Everything else is quiet chrome, so the clothes carry the screen.
 
-## Colour tokens
-| Token | Light | Dark | Use |
-|---|---|---|---|
-| `--fog` (background) | `#EEF1F4` | `#18202B` | App background (overcast / night) |
-| `--paper` (surface) | `#FFFFFF` | `#222C39` | Item tiles, sheets |
-| `--ink` (text) | `#1B2430` | `#E8EDF2` | Primary text, primary button fill |
-| `--ink-2` (secondary text) | `#5A6675` | `#A3AFBD` | Secondary text. AA on fog: 5.4:1 light / 6.9:1 dark |
-| `--line` | `#D5DBE2` | `#344255` | Dividers, outlines |
-| `--rain` | `#3D6FB6` | `#7FA9E6` | Rain markers, links, focus ring |
-
-**Temperature ramp** (data only, never decoration). Feels-like °C is mapped through these stops:
-
-| Stop | Colour | Feels-like |
+### Plan, checked against generic defaults
+| First instinct | Why it was rejected | What we did |
 |---|---|---|
-| frost | `#8FB3E0` | ≤ 0° |
-| chill | `#A9CBD8` | 8° |
-| mild | `#B9D7B4` | 15° |
-| warm | `#F2D27A` | 23° |
-| hot | `#F0A07A` | ≥ 30° |
+| Horizontal ribbon under a big header (v1) | Pushed the outfit below the fold; the ribbon needed a legend | The day became the **background** and a **vertical rail** beside the deck; the legend is written as the day's plan ("Camel trench on all day", "Rain from 17:00") |
+| White card per outfit, three buttons under it | SaaS card kit; Plan B / Reshuffle / 👍 / 👎 competed | A **deck**: swipe left for another look, right to love it. The same three actions sit in a glass dock: ✕, **Wear this**, ♥ |
+| Cream + serif, or black + acid accent | The two most common generated looks | Overcast **mist** chrome, ink text, **one accent (cobalt)** for selection, rain and focus |
+| Small caps eyebrows, middle-dot meta strings | Template tells | Sentence case; place and date on two plain lines |
+| Lock icon on every piece | Four identical icons, noise | Tap a garment to keep it; a pin appears only on kept pieces |
 
-The Day Ribbon draws the ramp. The Today header is tinted with the window's mean colour at 18% over `--fog`. Text on the ribbon always sits outside it, so contrast never depends on the ramp.
+## Tokens (see `src/theme/tokens.css`)
+**Chrome:**
+- `--mist #ECEEEA`, dark `#101318`
+- `--surface #FFF`, dark `#1B1F26`
+- `--surface-2`
+- `--ink #1A1D21`; `--ink-2`; `--ink-3`
+- `--line`
+- `--cobalt #2742D6`, dark `#8EA0FF` (the only accent)
+- `--danger`
 
-## Typography
-- **Typeface:** **Schibsted Grotesk**, the only family. It was cut for a Nordic news publisher (forecast-page heritage), has sturdy tabular figures, and has enough weight range to run display numerals and UI.
-- **Scale:** 6 steps on a 1.25 ratio, rem-based so it follows the browser and OS text size.
+**Sky ramp (data colour, feels-like):**
 
-| Role | Size / line-height | Weight | Notes |
+| Temperature | Name | Light | Dark |
 |---|---|---|---|
-| `display` | 56/56 | 700 | Temperature range only. Tabular figures, −2% tracking |
-| `title` | 28/32 | 700 | Screen titles |
-| `heading` | 20/26 | 600 | Section headings |
-| `body` | 17/24 | 400 | Matches the iOS body size |
-| `small` | 14/20 | 500 | Secondary text, chip labels |
-| `micro` | 12/16 | 500 | Ribbon hour ticks only |
+| ≤ 0° | frost | `#A9C8F2` | `#1D3254` |
+| 8° | chill | `#BCDDE8` | `#1C3A44` |
+| 15° | fresh | `#CFE7C9` | `#22392C` |
+| 22° | warm | `#F7DE96` | `#43391A` |
+| ≥ 30° | heat | `#F8B993` | `#4A2C1D` |
 
-- **Sentence case everywhere.** No all-caps labels and no eyebrow labels.
+Interpolated per hour in `components/Sky.tsx`.
 
-## Spacing, shape, elevation
-- **Grid:** 4-point base. Spacing steps 4, 8, 12, 16, 24, 32, 48. Screen side padding 20.
-- **Radius scales with size**, not one value everywhere:
-  - chips: 999
-  - buttons: 14
-  - tiles: 16
-  - sheets: 24 on the top corners
-- **Elevation:** only on sheets and the tab bar (`0 -1px 0 var(--line)` plus a blurred backdrop). Item tiles are flat on white.
-- **Touch targets:** ≥ 44×44 pt everywhere, including chips (visual height 32 with padding for the hit area).
+**Type:** Archivo variable, self-hosted (`@fontsource-variable/archivo`, OFL), with width and weight axes.
+
+| Style | Size | Width | Weight | Use |
+|---|---|---|---|---|
+| hero | 68 | 125% | 780 | Temperatures, tabular numerals |
+| display | 34 | 112% | 720 | Screen titles |
+| verdict | 22 | 106% | 640 | The day's sentence |
+| title | 22 | | | |
+| body | 17 | | 420 | Reading text |
+| small | 14 | | | |
+| micro | 12 | | | |
+
+**Space:** 4-point scale, 20px page padding.
+
+**Radius:** grows with the object.
+- 10: wells
+- 14: inputs
+- 22: tiles and lists
+- 32: look cards and sheets
+- pill: buttons, chips, tab bar, dock
+
+**Elevation:** two tinted levels (`--lift-1`, `--lift-2`), no grey drop-shadow kit.
+
+**Motion:**
+- `--ease` is `cubic-bezier(.22,1,.36,1)`.
+- `--spring` is used for kept pieces, the stamp and toggles.
+- Durations are 160ms and 280ms.
 
 ## Components
-| Component | States |
-|---|---|
-| Primary button (ink fill) | default, pressed (scale .98), disabled (40%), loading (spinner, label kept) |
-| Secondary button (outline) | same states |
-| Chip (choice, filter) | off, on (ink fill), focus ring |
-| Item tile | default, locked (lock badge + ink outline), in the wash (55% opacity + label), selected |
-| Day Ribbon | normal, rain hours, layer span, stale data (dashed outline + "Forecast from 07:12") |
-| Tag card | suggested (tags labelled "suggested"), confirmed |
-| Sheet | half, full; drag handle; Escape and swipe-down to dismiss |
-| Tab bar | 4 tabs: Today, Closet, Add, Settings. Icon + label, active = ink |
-| Banner | trial countdown, offline, install hint |
-
-## Motion
-| Moment | Spec | Reduced motion |
-|---|---|---|
-| Outfit reveal (open Today, Plan B) | Pieces settle into the flat-lay: opacity 0→1, translateY 8→0, 40 ms stagger, 280 ms `cubic-bezier(.2,.8,.2,1)` | Instant crossfade, 120 ms |
-| Reshuffle | Unlocked tiles flip out and the new ones in: 220 ms. Locked tile stays still | Crossfade, 120 ms |
-| Tag-card swipe | Follows the finger. On release past 30% width: 240 ms exit with slight rotation | Buttons only |
-| Sheet | 300 ms spring-like ease | Fade, 120 ms |
-
-There is **one orchestrated moment** (the outfit reveal). Nothing animates on its own after that.
+- **Floating tab bar:** a glass capsule inset 16px from the edges. The active tab gets a soft ink pill.
+- **Look deck** (`components/Look.tsx`):
+  - The top card is glass over the sky.
+  - The next two looks peek behind it, rotated, to show there are more.
+  - Drag past 28% of the width: left gives another look (a weak "skip" signal), right loves the look (strong signal plus a heart burst).
+  - Keyboard: ← and →.
+  - "Wear this" stamps the card ("Worn today", a spring stamp that settles into the corner).
+- **Composition:** pieces are laid out head to toe with slight rotation, using percentage boxes per slot combination (`composeLayout`). Each piece is a button: tap to keep it in the next looks.
+- **Hour rail:**
+  - ticks every 2 hours
+  - cobalt hatched segment for rain
+  - ink bar for the hours the coat is on
+  - ring for "now"
+  - The plan line under the deck doubles as its legend.
+- **Closet wall:**
+  - Three columns, grouped by slot and sorted dark to light, so the closet reads as a gradient.
+  - Each tile is tinted with the garment's own colour.
+- **Tag card:**
+  - The photo sits on its own colour tint.
+  - Six picture tiles for the family, then at most four kinds.
+  - A colour swatch.
+  - Name, warmth, dressiness, pattern and rain behaviour are folded into one summary line.
+- **Settings:** inset grouped lists, including **Your style** (what we've learned, the opt-in share toggle, how we pick looks) and **Forecast for** in a sheet.
+- **Paywall:** an honest trial timeline (Day 1, Day 6 reminder, Day 8 choose a plan, no card until then) plus two plan cards.
 
 ## Accessibility
-- WCAG 2.2 AA contrast for all text, in both themes.
-- Visible focus ring: 2 px `--rain`, 2 px offset.
-- Every tile has an accessible name, e.g. "Navy trench coat, outer layer, locked".
-- The Day Ribbon has a text equivalent: "From 08:00 to 18:00 it feels 12° falling to 7°, rain from 18:00".
-- Respects `prefers-reduced-motion`, `prefers-color-scheme`, and text size up to 200% (layout reflows; the ribbon stays legible).
-- No information carried by colour alone: rain also has an icon and text, and temperature is printed as numbers.
+- **Contrast:**
+  - Ink on every sky stop is 9.9:1 or more.
+  - Secondary text on the sky uses `--ink-sky-2` (5:1 or more on every stop), because the usual `--ink-2` drops to 3.5:1 on frost and heat.
+  - Cobalt on white is 7.4:1.
+- **Targets:** at least 44px everywhere; the dock buttons are 52px.
+- **Gestures:** every gesture has a button and a key. Pieces are buttons with `aria-pressed` and a spoken name and slot.
+- **Reduced motion:** animations and transitions collapse to 1ms and the welcome sky stops drifting.
+- **Dark mode:** garments get a faint light rim and a soft light pool behind them, so black clothes stay visible on a night surface.

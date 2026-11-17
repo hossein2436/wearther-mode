@@ -1,32 +1,37 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore, trialDay, todayIso } from '../state/store';
 import { scenarioForecast } from '../data/mock';
-import { missingSlots, pick, signature, summarize, thermalOffset } from '../engine';
-import { DayRibbon, tempColor, hh } from '../components/DayRibbon';
-import { FlatLay } from '../components/FlatLay';
+import { missingSlots, pickLooks, signature, summarize, thermalOffset, RAIN_THRESHOLD } from '../engine';
+import type { WindowSummary } from '../types';
+import { SkyBackground } from '../components/Sky';
+import { LookDeck } from '../components/Look';
 import { Icon } from '../components/Icon';
 import { degFor, isStandalone, timeOf } from './format';
-import type { WindowSummary } from '../types';
 import { PaywallSheet, InstallSheet } from './Sheets';
+
+const hh = (h: number) => `${String(h).padStart(2, '0')}:00`;
+const INSTALL_KEY = 'wm-hide-install';
+const installHidden = () => { try { return localStorage.getItem(INSTALL_KEY) === '1'; } catch { return false; } };
+const press = (key: 'ArrowLeft' | 'ArrowRight') =>
+  document.querySelector<HTMLElement>('.deck')?.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
 
 export function Today() {
   const { s, d } = useStore();
-  const [locked, setLocked] = useState<string[]>([]);
-  const [exclude, setExclude] = useState<string[]>([]);
-  const [showB, setShowB] = useState(false);
-  const [paywall, setPaywall] = useState(true); // auto-opens once the trial has ended
+  const [kept, setKept] = useState<string[]>([]);
+  const [index, setIndex] = useState(0);
+  const [round, setRound] = useState(0);
+  const [justWorn, setJustWorn] = useState(false);
+  const [paywall, setPaywall] = useState(true);
   const [plans, setPlans] = useState(false);
   const [install, setInstall] = useState(false);
   const [hideInstall, setHideInstall] = useState(installHidden);
-  const [celebrate, setCelebrate] = useState(false);
   const deg = degFor(s.units);
 
-  // Which day are we dressing for? After you're back home, it's tomorrow.
+  // After you're home, we dress you for tomorrow.
   const now = new Date();
   const tomorrow = now.getHours() >= s.win.back;
   const dayIso = tomorrow ? todayIso(new Date(now.getTime() + 86_400_000)) : s.isoToday;
 
-  // Review links use scenario weather; the real app uses the server forecast.
   const demoFetched = useMemo(() => {
     const t = new Date();
     if (s.offline) t.setHours(7, 12, 0, 0);
@@ -38,93 +43,99 @@ export function Today() {
     return s.forecast && day ? { place: s.forecast.place, fetchedAt: s.forecast.fetchedAt, hours: day.hours } : null;
   }, [s.demo, s.scenario, demoFetched, s.place, s.forecast, dayIso]);
   const stale = s.offline || !!s.forecast?.stale;
-  const fetchedAt = forecast?.fetchedAt ?? demoFetched;
   const summary = useMemo(
     () => (forecast ? summarize(forecast, s.win, thermalOffset(s.thermal, s.learnedOffset)) : null),
     [forecast, s.win, s.thermal, s.learnedOffset],
   );
   const recent = s.worn.filter((w) => w.date !== s.isoToday).map((w) => [...w.ids].sort().join('+'));
-  const picks = useMemo(
-    () => (summary ? pick({ closet: s.closet, summary, today: dayIso, pairWeights: s.pairWeights, recentOutfits: recent }, { exclude, locked }) : { hero: null, planB: null }),
+  const looks = useMemo(
+    () => (summary
+      ? pickLooks({
+          closet: s.closet, summary, today: dayIso, pairWeights: s.pairWeights, recentOutfits: recent,
+          taste: s.taste, prior: s.prior, evidence: s.tasteEvidence,
+        }, { locked: kept, n: 6 })
+      : []),
+    // Taste is applied to the next deck, not mid-swipe, so the card under your thumb doesn't jump.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [s.closet, summary, dayIso, s.pairWeights, exclude, locked],
+    [s.closet, summary, dayIso, kept, round],
   );
-  const outfit = showB ? picks.planB : picks.hero;
+
+  const wornToday = s.worn.find((w) => w.date === s.isoToday);
+  const wornSig = wornToday ? [...wornToday.ids].sort().join('+') : undefined;
+  // If you've already chosen today, open on that look.
+  useEffect(() => {
+    if (!wornSig) return;
+    const i = looks.findIndex((o) => signature(o.items) === wornSig);
+    if (i >= 0) setIndex(i);
+  }, [looks, wornSig]);
+
   const day = trialDay(s);
   const expired = !s.subscribed && day !== null && day >= 8;
-  const wornToday = s.worn.find((w) => w.date === s.isoToday);
-  const isWorn = !!outfit && !!wornToday && signature(outfit.items) === [...wornToday.ids].sort().join('+');
   const avail = s.closet.filter((i) => i.status === 'available');
   const missing = missingSlots(avail);
-  const mean = summary ? (summary.minFeels + summary.maxFeels) / 2 : 12;
-  const outerName = outfit?.items.find((i) => i.slot === 'outer')?.name;
+  const look = looks[index];
+  const lookSig = look ? signature(look.items) : '';
+  const isWorn = !!look && lookSig === wornSig;
+  const isLoved = s.loved.includes(lookSig);
+  const showDeck = !expired && !missing.length && !!summary && looks.length > 0;
 
-  const reshuffle = () => {
-    if (!outfit || !summary) return;
-    const next = pick(
-      { closet: s.closet, summary, today: dayIso, pairWeights: s.pairWeights, recentOutfits: recent },
-      { exclude: [...exclude, signature(outfit.items)], locked },
-    );
-    if (!next.hero) {
-      d({ type: 'toast', text: 'No other outfit keeps those pieces. Unlock one to see more.' });
-      return;
-    }
-    setExclude([...exclude, signature(outfit.items)]);
-    setShowB(false);
+  const signal = (sg: 'skip' | 'love' | 'wear') => {
+    if (!look) return;
+    d({ type: 'feedback', signal: sg, ids: look.items.map((i) => i.id), features: look.features, quiet: sg !== 'love' });
   };
-
   const wear = () => {
-    if (!outfit) return;
-    d({ type: 'wear', ids: outfit.items.map((i) => i.id) });
-    setCelebrate(true);
-    window.setTimeout(() => setCelebrate(false), 1600);
+    if (!look) return;
+    d({ type: 'wear', ids: look.items.map((i) => i.id) });
+    signal('wear');
+    setJustWorn(true);
+    window.setTimeout(() => setJustWorn(false), 1600);
   };
-  const dismissInstall = () => {
-    setHideInstall(true);
-    try { localStorage.setItem(INSTALL_KEY, '1'); } catch { /* private mode: dismiss for this visit only */ }
-  };
-  const showActions = !expired && !missing.length && !!summary && !!outfit;
 
   return (
-    <main className={`screen has-tabs today${showActions ? ' has-actionbar' : ''}`}>
+    <main className={`screen has-tabs today${showDeck ? ' has-dock' : ''}`}>
+      <SkyBackground s={summary} />
+
       {!summary || !forecast ? (
-        <section className="sky" style={{ ['--tint' as string]: tempColor(12) }} aria-live="polite">
+        <section className="empty-state" aria-live="polite">
           {!s.coords && !s.place ? (
             <>
-              <h1 className="t-title">Where are you today?</h1>
-              <p className="t-body">We need your city to get the forecast.</p>
+              <h1 className="t-display">Where are you today?</h1>
+              <p className="t-body muted">We need your city to read the sky.</p>
               <button className="btn primary" onClick={() => d({ type: 'go', route: 'settings' })}>Set my city</button>
             </>
           ) : s.offline ? (
             <>
-              <h1 className="t-title">You’re offline</h1>
-              <p className="t-body">Connect once to get today’s forecast for {s.place || 'your area'}.</p>
+              <h1 className="t-display">You’re offline</h1>
+              <p className="t-body muted">Connect once to get the forecast for {s.place || 'your area'}.</p>
             </>
           ) : (
-            <p className="t-body cutting"><span className="spinner" aria-hidden="true" /> Getting the forecast for {s.place || 'your area'}…</p>
+            <p className="working"><span className="spinner" aria-hidden="true" /> Reading the sky over {s.place || 'your area'}…</p>
           )}
         </section>
       ) : (
-      <section className="sky" style={{ ['--tint' as string]: tempColor(mean) }} aria-labelledby="today-line">
-        <div className="sky-head">
-          <div className="sky-text">
-            <p className="t-small sky-date">{tomorrow ? 'Tomorrow · ' : ''}{shortDate(dayIso)} · {forecast.place}</p>
-            <h1 id="today-line" className="sky-line">{skyLine(summary, s.win)}</h1>
+        <header aria-labelledby="verdict">
+          <div className="day-head">
+            <div className="day-place">
+              <strong>{forecast.place}</strong>
+              <span>{longDay(dayIso)}</span>
+            </div>
+            {tomorrow && <span className="day-tag">Tomorrow</span>}
           </div>
-          <p className="sky-temp" aria-label={`Feels like ${deg(summary.minFeels)} to ${deg(summary.maxFeels)}`}>
-            <span>{deg(summary.minFeels)}</span><span className="sky-temp-sep" aria-hidden="true">to</span><span>{deg(summary.maxFeels)}</span>
-            <span className="sky-temp-label">feels like</span>
+          <p className="day-temp" aria-label={`Feels like ${deg(summary.minFeels)} to ${deg(summary.maxFeels)}`}>
+            <span className="t-hero">{deg(summary.minFeels)}</span>
+            {summary.maxFeels !== summary.minFeels && <><span className="to">to</span><span className="t-hero">{deg(summary.maxFeels)}</span></>}
           </p>
-        </div>
-        <DayRibbon s={summary} layer={outfit?.layerHours ?? null} layerName={outerName} deg={deg} stale={stale} />
-        {stale && <p className="t-micro stale-note">Offline. Using the forecast from {timeOf(fetchedAt)}.</p>}
-      </section>
+          <p className="day-feels">
+            Feels like, {hh(s.win.leave)} to {hh(s.win.back)}{stale ? `. Offline: forecast from ${timeOf(forecast.fetchedAt)}` : ''}
+          </p>
+          <h1 id="verdict" className="day-verdict" style={{ marginTop: 'var(--s3)' }}>{verdict(summary, s.win)}</h1>
+        </header>
       )}
 
       {s.checkInFor && s.checkInFor < s.isoToday && (
-        <section className="card checkin" aria-labelledby="checkin-title">
-          <h2 id="checkin-title" className="t-heading">How was yesterday’s outfit?</h2>
-          <div className="checkin-row">
+        <section className="card glass" aria-labelledby="checkin-title">
+          <h2 id="checkin-title" className="t-title">How was yesterday’s outfit?</h2>
+          <div className="feel-row">
             <button className="btn secondary" onClick={() => d({ type: 'checkIn', feel: 'cold' })}>Too cold</button>
             <button className="btn secondary" onClick={() => d({ type: 'checkIn', feel: 'right' })}>Just right</button>
             <button className="btn secondary" onClick={() => d({ type: 'checkIn', feel: 'warm' })}>Too warm</button>
@@ -132,123 +143,145 @@ export function Today() {
         </section>
       )}
 
-      {day !== null && day >= 5 && day <= 7 && !s.subscribed && (
-        <div className="banner" role="note">
-          Your free week ends in {8 - day} {8 - day === 1 ? 'day' : 'days'}. Keep getting outfits for $3.99 a month.
-          <button className="link" onClick={() => setPlans(true)}>See plans</button>
-        </div>
-      )}
-
       {expired ? (
-        <section className="outfit locked-state">
-          <h2 className="t-heading">Subscribe to see today’s outfit</h2>
-          <p className="t-body muted">Your closet is safe and you can still browse and edit it.</p>
+        <section className="card glass">
+          <h2 className="t-title">Your free week is over</h2>
+          <p className="t-small muted">Your closet is safe. Pick a plan to keep getting a look every morning.</p>
           <button className="btn primary" onClick={() => setPaywall(true)}>See plans</button>
-          {paywall && <PaywallSheet onClose={() => setPaywall(false)} />}
         </section>
-      ) : missing.length ? (
-        <section className="outfit empty">
-          <h2 className="t-heading">
-            {s.closet.length ? `Add ${missing[0]} to get today’s outfit.` : 'Your closet is empty.'}
-          </h2>
-          <p className="t-body muted">
+      ) : summary && missing.length ? (
+        <section className="card glass">
+          <h2 className="t-title">{s.closet.length ? `Add ${missing[0]} to get today’s look` : 'Your closet is empty'}</h2>
+          <p className="t-small muted">
             {s.closet.length && s.closet.every((i) => i.status !== 'available')
               ? 'Everything’s in the wash. Mark laundry done when it’s back.'
               : 'Add a few things you wear a lot and we’ll start dressing you.'}
           </p>
           <button className="btn primary" onClick={() => d({ type: 'go', route: 'add' })}>Add clothes</button>
         </section>
-      ) : !summary ? null : outfit ? (
-        <section className="outfit" aria-labelledby="outfit-title">
-          <div className="outfit-head">
-            <h2 id="outfit-title" className="visually-hidden">{showB ? 'Plan B' : tomorrow ? 'Tomorrow’s outfit' : 'Today’s outfit'}</h2>
-            <div className="seg" role="group" aria-label="Which outfit">
-              <button aria-pressed={!showB} onClick={() => setShowB(false)}>{tomorrow ? 'Tomorrow' : 'Today'}</button>
-              <button aria-pressed={showB} disabled={!picks.planB} onClick={() => setShowB(true)}>Plan B</button>
-            </div>
-            <p className="t-small muted" aria-live="polite">
-              {locked.length ? `${locked.length} kept` : 'Tap a piece to keep it'}
-            </p>
-          </div>
-          <div className="flatlay-wrap">
-            <FlatLay
-              items={outfit.items}
-              locked={locked}
-              worn={celebrate}
-              revealKey={signature(outfit.items)}
-              onToggleLock={(id) => setLocked((l) => (l.includes(id) ? l.filter((x) => x !== id) : [...l, id]))}
+      ) : summary && !looks.length ? (
+        <section className="card glass">
+          <h2 className="t-title">Nothing in your closet suits this weather</h2>
+          <p className="t-small muted">Check what’s in the wash, or add a layer for {deg(summary.minFeels)}.</p>
+        </section>
+      ) : summary ? (
+        <>
+          <section className="stage" aria-label="Your looks for the day">
+            <Rail s={summary} layer={look?.layerHours ?? null} nowHour={tomorrow ? null : now.getHours()} />
+            <LookDeck
+              looks={looks}
+              index={index}
+              kept={kept}
+              onToggle={(id) => { setKept((k) => (k.includes(id) ? k.filter((x) => x !== id) : [...k, id])); setIndex(0); }}
+              onSkip={() => { signal('skip'); setIndex((i) => i + 1); }}
+              onLove={() => signal('love')}
+              onRestart={() => { setKept([]); setIndex(0); setRound((r) => r + 1); }}
+              wornSig={wornSig}
+              justWorn={justWorn}
+              lovedSigs={s.loved}
             />
-            {celebrate && (
-              <div className="worn-stamp" role="status">
-                <span className="worn-check"><Icon name="check" size={28} /></span>
-                Logged. Have a good day.
-              </div>
-            )}
-          </div>
-          <p className="why">{outfit.why}</p>
-          {outfit.notes.map((n) => <p key={n} className="note">{n}</p>)}
-          <div className="rate-row">
-            <span className="t-small muted">Good pick?</span>
-            <button className="icon-btn" aria-label="I like this outfit" onClick={() => { d({ type: 'rate', ids: outfit.items.map((i) => i.id), delta: 1 }); d({ type: 'toast', text: 'Noted. More like this.' }); }}>
-              <Icon name="up" />
-            </button>
-            <button
-              className="icon-btn"
-              aria-label="Not for me, show something else"
-              onClick={() => { d({ type: 'rate', ids: outfit.items.map((i) => i.id), delta: -1 }); reshuffle(); }}
-            >
-              <Icon name="down" />
-            </button>
-          </div>
+          </section>
 
-          <div className="action-bar">
-            <button className="btn secondary shuffle" onClick={reshuffle} aria-label={locked.length ? 'Reshuffle, keeping kept pieces' : 'Reshuffle'}>
-              <Icon name="shuffle" /> Shuffle
-            </button>
-            <button className={`btn primary wear${isWorn ? ' is-done' : ''}`} disabled={isWorn} onClick={wear}>
-              {isWorn ? <><Icon name="check" /> Wearing this today</> : 'Wear this'}
-            </button>
-          </div>
-        </section>
-      ) : (
-        <section className="outfit empty">
-          <h2 className="t-heading">Nothing in your closet suits today’s weather.</h2>
-          <p className="t-body muted">Check what’s in the wash, or add a layer for {deg(summary?.minFeels ?? 0)}.</p>
-        </section>
+          {look && <PlanLine s={summary} look={look.items} layer={look.layerHours} />}
+          {look && <p className="why-weather">{look.style.length > 1 ? `${look.style[1]}. ` : ''}{look.why}</p>}
+          {look?.notes.map((n) => <p key={n} className="note">{n}</p>)}
+
+          {look && (
+            <div className="actions-dock">
+              <button className="round" aria-label="Another look" onClick={() => press('ArrowLeft')}>
+                <Icon name="x" size={26} />
+              </button>
+              <button className={`btn primary${isWorn ? ' is-done' : ''}`} disabled={isWorn} onClick={wear}>
+                {isWorn ? <><Icon name="check" /> Wearing this</> : 'Wear this'}
+              </button>
+              <button className={`round${isLoved ? ' is-on' : ''}`} aria-label="Love this look" aria-pressed={isLoved} onClick={() => press('ArrowRight')}>
+                <Icon name="heart" size={24} fill={isLoved} />
+              </button>
+            </div>
+          )}
+        </>
+      ) : null}
+
+      {day !== null && day >= 5 && day <= 7 && !s.subscribed && (
+        <div className="banner" role="note">
+          <span>{8 - day} {8 - day === 1 ? 'day' : 'days'} left of your free week</span>
+          <button className="btn" onClick={() => setPlans(true)}>See plans</button>
+        </div>
       )}
 
-      {!isStandalone() && !hideInstall && !expired && (
-        <section className="card install-hint">
-          <p className="t-small">Add Wearther Mode to your Home Screen so your closet stays safe and outfits can reach you each morning.</p>
-          <div className="checkin-row">
+      {!isStandalone() && !hideInstall && !expired && summary && (
+        <section className="card glass">
+          <p className="t-small">Add Wearther Mode to your Home Screen so your closet stays safe and your look can reach you each morning.</p>
+          <div className="row">
             <button className="btn secondary" onClick={() => setInstall(true)}>Show me how</button>
-            <button className="btn ghost" onClick={dismissInstall}>Not now</button>
+            <button className="btn quiet" onClick={() => { setHideInstall(true); try { localStorage.setItem(INSTALL_KEY, '1'); } catch { /* private mode */ } }}>Not now</button>
           </div>
         </section>
       )}
-      {summary && forecast && (
-        <p className="t-micro attribution">{s.forecast?.attribution ?? 'Weather data: MET Norway, CC BY 4.0'}</p>
-      )}
+      {summary && <p className="attribution">{s.forecast?.attribution ?? 'Weather data: MET Norway, CC BY 4.0'}</p>}
       {install && <InstallSheet onClose={() => setInstall(false)} />}
       {plans && !s.subscribed && <PaywallSheet onClose={() => setPlans(false)} />}
+      {expired && paywall && <PaywallSheet onClose={() => setPaywall(false)} />}
     </main>
   );
 }
 
-const INSTALL_KEY = 'wm-hide-install';
-const installHidden = () => { try { return localStorage.getItem(INSTALL_KEY) === '1'; } catch { return false; } };
+/** The hours you're out, top to bottom, beside the deck: rain marked in cobalt, the coat in ink. */
+function Rail({ s, layer, nowHour }: { s: WindowSummary; layer: [number, number] | null; nowHour: number | null }) {
+  const hours = s.hours;
+  const n = hours.length;
+  if (n < 2) return <div className="rail" aria-hidden="true" />;
+  const first = hours[0].hour, range = hours[n - 1].hour - first;
+  const pos = (h: number) => `calc(8px + (100% - 16px) * ${(h - first) / range})`;
+  const span = (a: number, b: number) => ({ top: pos(a), height: `calc((100% - 16px) * ${(b - a) / range})` });
+  const wet: [number, number][] = [];
+  for (const h of hours) {
+    if (h.precipProb < RAIN_THRESHOLD) continue;
+    const last = wet[wet.length - 1];
+    if (last && last[1] === h.hour - 1) last[1] = h.hour;
+    else wet.push([h.hour, h.hour]);
+  }
+  const ticks = hours.filter((h, i) => i === n - 1 || (i % 2 === 0 && hours[n - 1].hour - h.hour >= 2));
+  return (
+    <div className="rail" aria-hidden="true">
+      <span className="rail-line" />
+      {ticks.map((h) => <span key={h.hour} className="rail-tick" style={{ top: pos(h.hour) }}>{String(h.hour).padStart(2, '0')}</span>)}
+      {wet.map(([a, b]) => <span key={a} className="rail-rain" style={span(a, Math.max(b, a + 0.6))} />)}
+      {layer && <span className="rail-layer" style={span(layer[0], Math.max(layer[1], layer[0] + 0.6))} />}
+      {nowHour !== null && nowHour >= first && nowHour <= hours[n - 1].hour && <span className="rail-now" style={{ top: pos(nowHour) }} />}
+    </div>
+  );
+}
+
+/** The rail's legend, written as the day's plan. */
+function PlanLine({ s, look, layer }: { s: WindowSummary; look: { slot: string; name: string }[]; layer: [number, number] | null }) {
+  const outer = look.find((i) => i.slot === 'outer');
+  const first = s.hours[0].hour, last = s.hours[s.hours.length - 1].hour;
+  const items: { key: string; cls: string; text: string }[] = [];
+  if (outer && layer) {
+    const all = layer[0] === first && layer[1] === last;
+    items.push({ key: 'layer', cls: '', text: all ? `${outer.name} on all day` : `${outer.name} on ${hh(layer[0])}–${hh(layer[1] + 1)}` });
+  }
+  if (s.rainFrom !== null) {
+    items.push({ key: 'rain', cls: 'rain', text: s.rainTo !== null && s.rainTo < last ? `Rain ${hh(s.rainFrom)}–${hh(s.rainTo + 1)}` : `Rain from ${hh(s.rainFrom)}` });
+  }
+  if (!items.length) return null;
+  return (
+    <div className="plan-line">
+      {items.map((x) => <span key={x.key} className="plan-item"><i className={`plan-key ${x.cls}`} aria-hidden="true" />{x.text}</span>)}
+    </div>
+  );
+}
 
 /** One plain sentence about the day, like a forecaster would say it. */
-function skyLine(s: WindowSummary, win: { leave: number; back: number }): string {
+function verdict(s: WindowSummary, win: { leave: number; back: number }): string {
   const mean = (s.minFeels + s.maxFeels) / 2;
   const feel = mean < 4 ? 'Cold' : mean < 14 ? 'Cool' : mean < 20 ? 'Mild' : mean < 26 ? 'Warm' : 'Hot';
   const wind = s.maxWind >= 25 ? ' and windy' : '';
-  const rain = s.rainFrom === null
-    ? `dry until ${hh(win.back)}`
-    : s.rainFrom <= win.leave ? 'rain from the start' : `rain from ${hh(s.rainFrom)}`;
-  return `${feel}${wind}, ${rain}.`;
+  const rain = s.rainFrom === null ? `Dry until ${hh(win.back)}.` : s.rainFrom <= win.leave ? 'Rain from the start.' : `Rain from ${hh(s.rainFrom)}.`;
+  return `${feel}${wind}. ${rain}`;
 }
 
-function shortDate(iso: string): string {
-  return new Date(`${iso}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+function longDay(iso: string): string {
+  return new Date(`${iso}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
 }

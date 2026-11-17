@@ -17,16 +17,24 @@ const P: Record<string, string> = {
   share: 'M12 4v11M8 8l4-4 4 4M6 12v8h12v-8',
   plusbox: 'M5 5h14v14H5zM12 9v6M9 12h6',
   sun: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
+  heart: 'M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z',
+  x: 'M7 7l10 10M17 7L7 17',
+  pin: 'M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11zM12 8.5a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 0 0 0-3.2z',
+  coat: 'M9 3l3 3 3-3 5 3-2 6-2-1v10H8V11l-2 1-2-6zM12 6v15',
+  hanger: 'M12 7a2 2 0 1 1 2-2M12 7v1L3 15h18l-9-7',
+  flat: 'M4 7h16v12H4zM9 11h6',
+  light: 'M12 3v2M5.6 5.6 7 7M3 12h2M18.4 5.6 17 7M21 12h-2M8 15a4 4 0 1 1 8 0v2H8zM10 20h4',
+  chevron: 'M9 6l6 6-6 6',
   wifi: 'M3 3l18 18M8.5 16.5a5 5 0 0 1 7 0M5 12.6a10 10 0 0 1 4-2.3M12 10a10 10 0 0 1 7 2.6M12 20h.01',
 };
 
-export function Icon({ name, size = 22, label }: { name: keyof typeof P | string; size?: number; label?: string }) {
+export function Icon({ name, size = 22, label, fill }: { name: keyof typeof P | string; size?: number; label?: string; fill?: boolean }) {
   return (
     <svg
       width={size}
       height={size}
       viewBox="0 0 24 24"
-      fill="none"
+      fill={fill ? 'currentColor' : 'none'}
       stroke="currentColor"
       strokeWidth={1.75}
       strokeLinecap="round"

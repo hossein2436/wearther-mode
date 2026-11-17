@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Sheet } from '../components/ui';
 import { Icon } from '../components/Icon';
-import { useStore } from '../state/store';
+import { useStore, trialDay } from '../state/store';
 import { api, ApiError, tz } from '../api';
 
 export function PaywallSheet({ onClose }: { onClose?: () => void }) {
@@ -29,28 +29,42 @@ export function PaywallSheet({ onClose }: { onClose?: () => void }) {
       setBusy(false);
     }
   };
+  const day = trialDay(s) ?? 1;
+  const over = day >= 8;
+  const steps = [
+    { d: 1, title: 'Your free week starts', text: 'Every look, every morning, free.' },
+    { d: 6, title: 'We remind you', text: 'An email two days before it ends.' },
+    { d: 8, title: 'Pick a plan to keep going', text: 'No card until then. Your closet is yours either way.' },
+  ];
+  const upcoming = steps.find((y) => y.d >= day);
   return (
-    <Sheet title="Your free week is over" onClose={onClose}>
-      <p className="t-body">Keep getting an outfit for your whole day, every morning.</p>
+    <Sheet title={over ? 'Your free week is over' : 'How your free week works'} onClose={onClose}>
+      <ol className="timeline">
+        {steps.map((x) => (
+          <li key={x.d} className={day > x.d ? 'is-past' : x === upcoming ? 'is-now' : ''}>
+            <span className="dot">{day > x.d ? <Icon name="check" size={16} /> : <span className="t-micro">{x.d}</span>}</span>
+            <div><strong>Day {x.d}: {x.title}</strong><span>{x.text}</span></div>
+          </li>
+        ))}
+      </ol>
       <div className="plans" role="radiogroup" aria-label="Choose a plan">
         <button role="radio" aria-checked={plan === 'year'} className="plan" onClick={() => setPlan('year')}>
+          <span className="plan-flag">Save 48%</span>
           <span className="plan-name">Yearly</span>
-          <span className="plan-price">$24.99 a year</span>
-          <span className="plan-note">About $2.08 a month, 48% less than monthly</span>
+          <span className="plan-price">$24.99</span>
+          <span className="plan-note">About $2.08 a month</span>
         </button>
         <button role="radio" aria-checked={plan === 'month'} className="plan" onClick={() => setPlan('month')}>
           <span className="plan-name">Monthly</span>
-          <span className="plan-price">$3.99 a month</span>
+          <span className="plan-price">$3.99</span>
           <span className="plan-note">Cancel any time</span>
         </button>
       </div>
-      <button className="btn primary" onClick={() => void subscribe()} disabled={busy}>
+      <button className="btn primary lg block" onClick={() => void subscribe()} disabled={busy}>
         {busy ? 'Opening checkout…' : `Subscribe ${plan === 'year' ? 'yearly' : 'monthly'}`}
       </button>
       {msg && <p className="note" role="status">{msg}</p>}
-      <p className="t-small muted">
-        Your closet stays yours either way. You can still browse it and export it from Settings.
-      </p>
+      <p className="t-micro muted center">You can still browse and export your closet without a plan.</p>
     </Sheet>
   );
 }
@@ -65,7 +79,7 @@ export function InstallSheet({ onClose }: { onClose: () => void }) {
         <li><span className="install-icon"><Icon name="today" /></span>Open Wearther Mode from your Home Screen.</li>
       </ol>
       <p className="t-small muted">On Android, Chrome offers Install app on its own. Accept it when it appears.</p>
-      <button className="btn secondary" onClick={onClose}>Done</button>
+      <button className="btn secondary block" onClick={onClose}>Done</button>
     </Sheet>
   );
 }
@@ -101,15 +115,15 @@ export function NotifySheet({ onClose }: { onClose: () => void }) {
     onClose();
   };
   return (
-    <Sheet title="Get your outfit before you get up" onClose={onClose}>
-      <p className="t-body">One notification each morning with the temperature, any rain and what to wear. Nothing else.</p>
+    <Sheet title="Your look, before you’re up" onClose={onClose}>
+      <p className="t-body">One notification each morning: the temperature, any rain, and what to wear. Nothing else.</p>
       <label className="field">
         <span>Send it at</span>
         <input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
       </label>
       <p className="t-small muted">On iPhone, this works once Wearther Mode is on your Home Screen (iOS 16.4 or later).</p>
-      <button className="btn primary" onClick={() => void turnOn()} disabled={busy}>{busy ? 'Turning on…' : 'Turn on notifications'}</button>
-      <button className="btn ghost" onClick={onClose}>Not now</button>
+      <button className="btn primary lg block" onClick={() => void turnOn()} disabled={busy}>{busy ? 'Turning on…' : 'Turn on notifications'}</button>
+      <button className="btn quiet" onClick={onClose}>Not now</button>
     </Sheet>
   );
 }

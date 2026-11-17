@@ -3,6 +3,7 @@ import type { DayWindow, Item, Thermal } from '../types';
 import { sampleCloset, type ScenarioId } from '../data/mock';
 import { load, save, clearAll } from './db';
 import { pairKey } from '../engine';
+import { learn, label, type Signal, type Taste } from '../engine/taste';
 import type { WeatherResponse } from '../api';
 
 export type Route =
@@ -34,6 +35,14 @@ export interface State {
   trialStart: string | null;
   subscribed: boolean;
   pairWeights: Record<string, number>;
+  /** Learned weights over look features (engine/taste.ts). */
+  taste: Taste;
+  tasteEvidence: number;
+  /** Opt-in: send anonymous look features to improve everyone's starting point. Off by default. */
+  shareTaste: boolean;
+  tasteQueue: { f: string[]; y: 1 | -1 }[];
+  prior: Taste;
+  loved: string[];
   worn: { date: string; ids: string[] }[];
   checkInFor: string | null; // date of the wear awaiting a check-in
   autoWashAfter: number;
@@ -68,6 +77,12 @@ export const initialState: State = {
   trialStart: null,
   subscribed: false,
   pairWeights: {},
+  taste: {},
+  tasteEvidence: 0,
+  shareTaste: false,
+  tasteQueue: [],
+  prior: {},
+  loved: [],
   worn: [],
   checkInFor: null,
   autoWashAfter: 3,
@@ -91,6 +106,8 @@ export type Action =
   | { type: 'deleteItem'; id: string }
   | { type: 'wear'; ids: string[] }
   | { type: 'rate'; ids: string[]; delta: number }
+  | { type: 'tasteSent'; n: number }
+  | { type: 'feedback'; signal: Signal; ids: string[]; features: string[]; quiet?: boolean }
   | { type: 'checkIn'; feel: 'cold' | 'right' | 'warm' }
   | { type: 'laundryDone' }
   | { type: 'loadSample' }
@@ -136,6 +153,27 @@ function reducer(s: State, a: Action): State {
         }
       return { ...s, pairWeights: pw, toast: a.delta > 0 ? 'Noted. More like this.' : 'Noted. Here’s something different.' };
     }
+    case 'tasteSent':
+      return { ...s, tasteQueue: s.tasteQueue.slice(a.n) };
+    case 'feedback': {
+      const delta = a.signal === 'love' ? 1 : a.signal === 'dislike' ? -1 : a.signal === 'wear' ? 0.5 : -0.25;
+      const pw = { ...s.pairWeights };
+      for (let x = 0; x < a.ids.length; x++)
+        for (let y = x + 1; y < a.ids.length; y++) {
+          const k = pairKey(a.ids[x], a.ids[y]);
+          pw[k] = Math.max(-3, Math.min(3, (pw[k] ?? 0) + delta));
+        }
+      const sig = [...a.ids].sort().join('+');
+      return {
+        ...s,
+        pairWeights: pw,
+        taste: learn(s.taste, a.features, a.signal),
+        tasteEvidence: s.tasteEvidence + 1,
+        tasteQueue: s.shareTaste ? [...s.tasteQueue, { f: a.features, y: label(a.signal) }].slice(-200) : s.tasteQueue,
+        loved: a.signal === 'love' ? [...new Set([...s.loved, sig])] : s.loved,
+        toast: a.quiet ? s.toast : a.signal === 'love' ? 'Saved. You’ll see more like this.' : a.signal === 'dislike' ? 'Got it. Less like this.' : s.toast,
+      };
+    }
     case 'checkIn': {
       const d = a.feel === 'cold' ? -1 : a.feel === 'warm' ? 1 : 0;
       return { ...s, learnedOffset: Math.max(-4, Math.min(4, s.learnedOffset + d)), checkInFor: null, toast: d ? 'Thanks. Tomorrow’s outfit will adjust.' : 'Good to hear.' };
@@ -157,7 +195,7 @@ const Ctx = createContext<{ s: State; d: (a: Action) => void } | null>(null);
 
 const PERSIST: (keyof State)[] = [
   'onboarded', 'closet', 'win', 'thermal', 'learnedOffset', 'place', 'coords', 'forecast', 'units', 'notifyAt', 'email',
-  'trialStart', 'subscribed', 'pairWeights', 'worn', 'checkInFor', 'autoWashAfter', 'scenario', 'simDay',
+  'trialStart', 'subscribed', 'pairWeights', 'taste', 'tasteEvidence', 'shareTaste', 'tasteQueue', 'prior', 'loved', 'worn', 'checkInFor', 'autoWashAfter', 'scenario', 'simDay',
 ];
 
 export function StoreProvider({ children, initial }: { children: ReactNode; initial?: Partial<State> }) {

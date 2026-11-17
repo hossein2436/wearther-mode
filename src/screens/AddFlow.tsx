@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useStore, type DraftItem } from '../state/store';
 import type { Item } from '../types';
 import { Header } from '../components/ui';
 import { Icon } from '../components/Icon';
-import { ItemVisual } from '../components/Garment';
+import { Garment, ItemVisual } from '../components/Garment';
 import { TagEditor, autoName } from './TagEditor';
 import { dominantColor, nameColor } from '../engine/color';
 import { KINDS } from '../data/catalog';
@@ -39,11 +39,10 @@ async function prepare(file: File, demo: boolean): Promise<{ photo: string; cut:
 }
 
 export function AddScreen() {
-  const { d } = useStore();
   return (
     <main className="screen has-tabs">
-      <Header title="Add clothes" back={() => d({ type: 'go', route: 'closet' })} />
-      <p className="t-body muted">Bought something new? Add it here. The rest of your closet stays as it is.</p>
+      <Header title="Add clothes" />
+      <p className="t-body muted head-sub">Bought something new? Photograph it once. Everything else in your closet stays as it is.</p>
       <AddFlow />
     </main>
   );
@@ -96,24 +95,35 @@ export function AddFlow({ compact }: { compact?: boolean }) {
       <input ref={cam} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { void onFiles(e.target.files); e.target.value = ''; }} />
 
       {!s.drafts.length && (
-        <>
-          <div className="add-buttons">
-            <button className="btn primary" onClick={() => lib.current?.click()}>
-              <Icon name="photos" /> Choose photos
-            </button>
-            <button className="btn secondary" onClick={() => cam.current?.click()}>
+        <div className={compact ? 'stack' : 'capture'}>
+          {!compact && (
+            <div className="capture-art" aria-hidden="true">
+              <Garment kind="knit" color="#7A8B6F" />
+              <Garment kind="tshirt" color="#F4F4F2" />
+              <Garment kind="jeans" color="#3E5A7E" />
+            </div>
+          )}
+          <div className="stack">
+            <button className="btn primary block" onClick={() => cam.current?.click()}>
               <Icon name="camera" /> Take a photo
             </button>
+            <button className="btn secondary block" onClick={() => lib.current?.click()}>
+              <Icon name="photos" /> Choose from your photos
+            </button>
           </div>
-          <p className="t-small muted tips">
-            Best results: one piece per photo, laid flat or on a hanger, plain background, daylight.
-          </p>
-          {(s.demo || protoMode()) && <button className="btn ghost" onClick={addSamples}>Try it with sample clothes</button>}
-        </>
+          {!compact && (
+            <ul className="tips" aria-label="For the best cut-out">
+              <li><Icon name="flat" /> One piece, laid flat or hung</li>
+              <li><Icon name="light" /> Daylight, no flash</li>
+              <li><Icon name="hanger" /> Plain background</li>
+            </ul>
+          )}
+          {(s.demo || protoMode()) && <button className="btn quiet" onClick={addSamples}>Try it with sample clothes</button>}
+        </div>
       )}
 
       {cutting > 0 && (
-        <p className="cutting" role="status">
+        <p className="working" role="status">
           <span className="spinner" aria-hidden="true" /> Cutting out {cutting} {cutting === 1 ? 'photo' : 'photos'}…
         </p>
       )}
@@ -149,7 +159,8 @@ function TagCard({ draft, left }: { draft: DraftItem; left: number }) {
       style={{ transform: dx ? `translateX(${dx}px) rotate(${dx / 40}deg)` : undefined }}
     >
       <div
-        className="tagcard-photo"
+        className="tag-photo"
+        style={{ ['--tint' as string]: item.color } as CSSProperties}
         onPointerDown={(e) => { start.current = e.clientX; (e.target as HTMLElement).setPointerCapture?.(e.pointerId); }}
         onPointerMove={(e) => start.current !== null && setDx(Math.max(0, e.clientX - start.current))}
         onPointerUp={() => {
@@ -160,16 +171,17 @@ function TagCard({ draft, left }: { draft: DraftItem; left: number }) {
         }}
       >
         <ItemVisual item={item} />
-        <span className="tagcard-count">{left} to check</span>
+        <span className="tag-left">{left === 1 ? 'Last one' : `${left} to check`}</span>
       </div>
-      <TagEditor item={item} onChange={setItem} kindChosen={kindChosen} onKindChosen={() => setKindChosen(true)} />
-      <div className="tagcard-actions">
-        <button className="btn secondary" onClick={() => d({ type: 'discardDraft', id: draft.id })}>Skip this one</button>
+      <div className="tag-body">
+        <TagEditor item={item} onChange={setItem} kindChosen={kindChosen} onKindChosen={() => setKindChosen(true)} />
+      </div>
+      <div className="tag-actions">
+        <button className="btn secondary" onClick={() => d({ type: 'discardDraft', id: draft.id })}>Skip</button>
         <button className="btn primary" onClick={confirm} disabled={!kindChosen}>
-          {kindChosen ? <><Icon name="check" /> Looks right</> : 'Choose what it is'}
+          {kindChosen ? <><Icon name="check" /> Add to closet</> : 'Choose what it is'}
         </button>
       </div>
-      <p className="t-small muted center">Or swipe the photo right to confirm.</p>
     </div>
   );
 }

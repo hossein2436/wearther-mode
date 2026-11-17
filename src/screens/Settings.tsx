@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useStore, trialDay, resetEverything } from '../state/store';
 import { Header, Chip, Sheet } from '../components/ui';
+import { Icon } from '../components/Icon';
 import { ThermalChips } from './Onboarding';
 import { InstallSheet, NotifySheet, PaywallSheet } from './Sheets';
 import { SCENARIOS, type ScenarioId } from '../data/mock';
+import { describeFeature, strongest } from '../engine/taste';
 import { api } from '../api';
 import { protoMode } from './format';
 
@@ -12,10 +14,12 @@ const hh = (h: number) => `${String(h).padStart(2, '0')}:00`;
 
 export function Settings() {
   const { s, d } = useStore();
-  const [sheet, setSheet] = useState<null | 'install' | 'notify' | 'plans' | 'delete'>(null);
+  const [sheet, setSheet] = useState<null | 'install' | 'notify' | 'plans' | 'delete' | 'city' | 'style'>(null);
   const [typed, setTyped] = useState('');
   const [city, setCity] = useState(s.place);
   const [cityMsg, setCityMsg] = useState('');
+  const day = trialDay(s);
+  const learned = strongest(s.taste, 4);
 
   const saveCity = async () => {
     const q = city.trim();
@@ -25,22 +29,21 @@ export function Settings() {
       const g = s.demo ? { name: q, lat: 0, lon: 0 } : await api.geocode(q);
       d({ type: 'patch', patch: { place: g.name, coords: s.demo ? null : { lat: g.lat, lon: g.lon }, forecast: null } });
       setCity(g.name);
-      setCityMsg(`Forecast set to ${g.name}.`);
+      setSheet(null);
+      d({ type: 'toast', text: `Forecast set to ${g.name}` });
     } catch {
       setCityMsg(`We couldn’t find “${q}”. Try the nearest big city.`);
     }
   };
-
   const locateMe = () =>
     navigator.geolocation?.getCurrentPosition(
       (pos) => {
         d({ type: 'patch', patch: { coords: { lat: Math.round(pos.coords.latitude * 100) / 100, lon: Math.round(pos.coords.longitude * 100) / 100 }, forecast: null } });
-        setCityMsg('Using your location.');
+        setSheet(null);
+        d({ type: 'toast', text: 'Using your location' });
       },
       () => setCityMsg('Location is off. Type your city instead.'),
     );
-  const day = trialDay(s);
-
   const exportCloset = () => {
     const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), closet: s.closet, worn: s.worn }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
@@ -50,132 +53,172 @@ export function Settings() {
     URL.revokeObjectURL(a.href);
     d({ type: 'toast', text: 'Closet exported' });
   };
+  const subText = s.subscribed ? 'Subscribed. Thank you.'
+    : day === null ? 'Starts when you save your closet'
+    : day >= 8 ? 'Free week ended'
+    : `${8 - day} ${8 - day === 1 ? 'day' : 'days'} of your free week left`;
 
   return (
-    <main className="screen has-tabs settings">
+    <main className="screen has-tabs">
       <Header title="Settings" />
 
-      <section aria-labelledby="set-day">
-        <h2 id="set-day" className="t-heading">Your day</h2>
-        <div className="field-row">
-          <label className="field">
-            <span>I leave at</span>
-            <select value={s.win.leave} onChange={(e) => d({ type: 'patch', patch: { win: { ...s.win, leave: +e.target.value } } })}>
-              {HOURS.filter((h) => h < s.win.back).map((h) => <option key={h} value={h}>{hh(h)}</option>)}
-            </select>
-          </label>
-          <label className="field">
-            <span>I’m back at</span>
-            <select value={s.win.back} onChange={(e) => d({ type: 'patch', patch: { win: { ...s.win, back: +e.target.value } } })}>
-              {HOURS.filter((h) => h > s.win.leave).map((h) => <option key={h} value={h}>{hh(h)}</option>)}
-            </select>
-          </label>
+      <h2 className="list-head">Your day</h2>
+      <div className="list">
+        <div className="list-row">
+          <span className="label"><strong>Out at</strong></span>
+          <select aria-label="Out at" value={s.win.leave} onChange={(e) => d({ type: 'patch', patch: { win: { ...s.win, leave: +e.target.value } } })}>
+            {HOURS.filter((h) => h < s.win.back).map((h) => <option key={h} value={h}>{hh(h)}</option>)}
+          </select>
         </div>
-        <form className="city-form" onSubmit={(e) => { e.preventDefault(); void saveCity(); }}>
-          <label className="field">
-            <span>City for the forecast</span>
-            <input value={city} onChange={(e) => setCity(e.target.value)} autoComplete="address-level2" />
-          </label>
-          <div className="row-actions">
-            <button className="btn secondary" type="submit">Save city</button>
-            <button className="btn ghost" type="button" onClick={locateMe}>Use my location</button>
+        <div className="list-row">
+          <span className="label"><strong>Back at</strong></span>
+          <select aria-label="Back at" value={s.win.back} onChange={(e) => d({ type: 'patch', patch: { win: { ...s.win, back: +e.target.value } } })}>
+            {HOURS.filter((h) => h > s.win.leave).map((h) => <option key={h} value={h}>{hh(h)}</option>)}
+          </select>
+        </div>
+        <button className="list-row tap" onClick={() => { setCityMsg(''); setSheet('city'); }}>
+          <span className="label"><strong>Forecast for</strong><small>{s.place || (s.coords ? 'Your location' : 'Not set')}</small></span>
+          <Icon name="chevron" />
+        </button>
+        <div className="list-row">
+          <span className="label"><strong>Temperature</strong></span>
+          <div className="seg" role="radiogroup" aria-label="Temperature units" style={{ width: 132 }}>
+            <button role="radio" aria-checked={s.units === 'C'} onClick={() => d({ type: 'patch', patch: { units: 'C' } })}>°C</button>
+            <button role="radio" aria-checked={s.units === 'F'} onClick={() => d({ type: 'patch', patch: { units: 'F' } })}>°F</button>
           </div>
-          {cityMsg && <p className="t-small muted" role="status">{cityMsg}</p>}
-        </form>
-      </section>
-
-      <section aria-labelledby="set-feel">
-        <h2 id="set-feel" className="t-heading">How you feel the cold</h2>
-        <ThermalChips />
-        {s.learnedOffset !== 0 && (
-          <p className="t-small muted">
-            From your check-ins we dress you {Math.abs(s.learnedOffset)}° {s.learnedOffset < 0 ? 'warmer' : 'cooler'} than average.
-          </p>
-        )}
-      </section>
-
-      <section aria-labelledby="set-units">
-        <h2 id="set-units" className="t-heading">Temperature</h2>
-        <div className="chips">
-          <Chip on={s.units === 'C'} onClick={() => d({ type: 'patch', patch: { units: 'C' } })}>Celsius</Chip>
-          <Chip on={s.units === 'F'} onClick={() => d({ type: 'patch', patch: { units: 'F' } })}>Fahrenheit</Chip>
         </div>
-      </section>
+      </div>
 
-      <section aria-labelledby="set-notify">
-        <h2 id="set-notify" className="t-heading">Morning outfit</h2>
-        <p className="t-body muted">{s.notifyAt ? `Sent every day at ${s.notifyAt}.` : 'Off.'}</p>
-        <div className="row-actions">
-          <button className="btn secondary" onClick={() => setSheet('notify')}>{s.notifyAt ? 'Change time' : 'Turn on'}</button>
-          {s.notifyAt && (
-            <button className="btn ghost" onClick={() => { if (!s.demo) void api.pushUnsubscribe().catch(() => undefined); d({ type: 'patch', patch: { notifyAt: null } }); }}>
-              Turn off
-            </button>
+      <h2 className="list-head">How you feel the cold</h2>
+      <ThermalChips />
+      {s.learnedOffset !== 0 && (
+        <p className="t-small muted">From your check-ins, we dress you {Math.abs(s.learnedOffset)}° {s.learnedOffset < 0 ? 'warmer' : 'cooler'} than average.</p>
+      )}
+
+      <h2 className="list-head">Your style</h2>
+      <div className="list">
+        <div className="list-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+          <span className="label">
+            <strong>What we’ve learned</strong>
+            <small>{s.tasteEvidence ? `From ${s.tasteEvidence} looks you wore, loved or skipped.` : 'Wear, love or skip a few looks and this fills in.'}</small>
+          </span>
+          {(learned.likes.length > 0 || learned.avoids.length > 0) && (
+            <div className="taste-tags" style={{ marginTop: 8 }}>
+              {learned.likes.map((f) => <span key={f} className="taste-tag">{describeFeature(f)}</span>)}
+              {learned.avoids.map((f) => <span key={f} className="taste-tag no">{describeFeature(f)}</span>)}
+            </div>
           )}
         </div>
-        <button className="btn ghost" onClick={() => setSheet('install')}>Add to Home Screen</button>
-      </section>
+        <label className="list-row">
+          <span className="label">
+            <strong>Help improve picks for everyone</strong>
+            <small>Shares which kinds of looks you choose, never photos or item names.</small>
+          </span>
+          <input
+            type="checkbox"
+            className="toggle"
+            checked={s.shareTaste}
+            onChange={(e) => d({ type: 'patch', patch: { shareTaste: e.target.checked, tasteQueue: [] } })}
+          />
+        </label>
+        <button className="list-row tap" onClick={() => setSheet('style')}>
+          <span className="label"><strong>How we pick looks</strong></span>
+          <Icon name="chevron" />
+        </button>
+      </div>
 
-      <section aria-labelledby="set-sub">
-        <h2 id="set-sub" className="t-heading">Subscription</h2>
-        <p className="t-body muted">
-          {s.subscribed
-            ? 'You’re subscribed. Thank you.'
-            : day === null
-              ? 'Your free week starts when you save your closet.'
-              : day >= 8
-                ? 'Your free week has ended.'
-                : `Free week: ${8 - day} ${8 - day === 1 ? 'day' : 'days'} left.`}
-        </p>
-        {!s.subscribed && <button className="btn secondary" onClick={() => setSheet('plans')}>See plans</button>}
+      <h2 className="list-head">Mornings</h2>
+      <div className="list">
+        <div className="list-row">
+          <span className="label"><strong>Morning look</strong><small>{s.notifyAt ? `Every day at ${s.notifyAt}` : 'Off'}</small></span>
+          {s.notifyAt ? (
+            <button className="btn quiet" onClick={() => { if (!s.demo) void api.pushUnsubscribe().catch(() => undefined); d({ type: 'patch', patch: { notifyAt: null } }); }}>Turn off</button>
+          ) : (
+            <button className="btn secondary" onClick={() => setSheet('notify')}>Turn on</button>
+          )}
+        </div>
+        <button className="list-row tap" onClick={() => setSheet('install')}>
+          <span className="label"><strong>Add to Home Screen</strong></span>
+          <Icon name="chevron" />
+        </button>
+      </div>
+
+      <h2 className="list-head">Account</h2>
+      <div className="list">
+        <div className="list-row">
+          <span className="label"><strong>Subscription</strong><small>{subText}</small></span>
+          {!s.subscribed && <button className="btn secondary" onClick={() => setSheet('plans')}>See plans</button>}
+        </div>
         {s.email && (
-          <div className="row-actions">
-            <p className="t-small muted">Signed in as {s.email}</p>
-            <button className="btn ghost" onClick={() => { if (!s.demo) void api.logout().catch(() => undefined); d({ type: 'patch', patch: { email: null } }); }}>Sign out</button>
+          <div className="list-row">
+            <span className="label"><strong>Signed in</strong><small>{s.email}</small></span>
+            <button className="btn quiet" onClick={() => { if (!s.demo) void api.logout().catch(() => undefined); d({ type: 'patch', patch: { email: null } }); }}>Sign out</button>
           </div>
         )}
-      </section>
+      </div>
 
-      <section aria-labelledby="set-privacy">
-        <h2 id="set-privacy" className="t-heading">Your data</h2>
-        <p className="t-body muted">
-          Photos of your clothes are cut out on our server, then the original is deleted. Your closet is kept on this phone and backed up to your account. For the forecast we send only a rough area, never your exact location. No ads, and we never sell data.
-        </p>
-        <div className="row-actions">
-          <button className="btn secondary" onClick={exportCloset}>Export my closet</button>
-          <button className="btn danger-ghost" onClick={() => setSheet('delete')}>Delete all my data</button>
-        </div>
-      </section>
+      <h2 className="list-head">Your data</h2>
+      <p className="t-small muted">
+        Photos are cut out on our server and the original is deleted. Your closet lives on this phone and is backed up to your account. The forecast uses only a rough area. No ads, and we never sell data.
+      </p>
+      <div className="list">
+        <button className="list-row tap" onClick={exportCloset}>
+          <span className="label"><strong>Export my closet</strong></span>
+          <Icon name="share" />
+        </button>
+        <button className="list-row tap danger" onClick={() => setSheet('delete')}>
+          <span className="label"><strong>Delete all my data</strong></span>
+        </button>
+      </div>
 
-      {(s.demo || protoMode()) && <section className="proto" aria-labelledby="set-proto">
-        <h2 id="set-proto" className="t-heading">Prototype controls</h2>
-        <p className="t-small muted">For reviewing the design. Not part of the real app.</p>
-        <p className="t-small">Weather</p>
-        <div className="chips">
-          {(Object.keys(SCENARIOS) as ScenarioId[]).map((id) => (
-            <Chip key={id} on={s.scenario === id} onClick={() => d({ type: 'patch', patch: { scenario: id, place: SCENARIOS[id].place } })}>
-              {SCENARIOS[id].label}
-            </Chip>
-          ))}
-        </div>
-        <p className="t-small">Trial day</p>
-        <div className="chips">
-          {[null, 1, 5, 8].map((v) => (
-            <Chip key={String(v)} on={s.simDay === v} onClick={() => d({ type: 'patch', patch: { simDay: v, subscribed: false } })}>
-              {v === null ? 'Real' : `Day ${v}`}
-            </Chip>
-          ))}
-        </div>
-        <div className="chips">
-          <Chip on={s.offline} onClick={() => d({ type: 'patch', patch: { offline: !s.offline } })}>Offline</Chip>
-          <Chip on={false} onClick={() => { d({ type: 'patch', patch: { checkInFor: '2000-01-01' } }); d({ type: 'go', route: 'today' }); }}>Show morning check-in</Chip>
-          <Chip on={false} onClick={() => { d({ type: 'loadSample' }); d({ type: 'toast', text: 'Sample closet loaded' }); }}>Load sample closet</Chip>
-        </div>
-      </section>}
+      {(s.demo || protoMode()) && (
+        <section className="proto" aria-labelledby="set-proto">
+          <h2 id="set-proto" className="t-small" style={{ fontWeight: 650 }}>Prototype controls</h2>
+          <p className="t-micro muted">For reviewing the design. Not part of the real app.</p>
+          <div className="chips">
+            {(Object.keys(SCENARIOS) as ScenarioId[]).map((id) => (
+              <Chip key={id} on={s.scenario === id} onClick={() => d({ type: 'patch', patch: { scenario: id, place: SCENARIOS[id].place } })}>{SCENARIOS[id].label}</Chip>
+            ))}
+          </div>
+          <div className="chips">
+            {[null, 1, 5, 8].map((v) => (
+              <Chip key={String(v)} on={s.simDay === v} onClick={() => d({ type: 'patch', patch: { simDay: v, subscribed: false } })}>{v === null ? 'Real trial' : `Day ${v}`}</Chip>
+            ))}
+          </div>
+          <div className="chips">
+            <Chip on={s.offline} onClick={() => d({ type: 'patch', patch: { offline: !s.offline } })}>Offline</Chip>
+            <Chip on={false} onClick={() => { d({ type: 'patch', patch: { checkInFor: '2000-01-01' } }); d({ type: 'go', route: 'today' }); }}>Morning check-in</Chip>
+            <Chip on={false} onClick={() => { d({ type: 'loadSample' }); d({ type: 'toast', text: 'Sample closet loaded' }); }}>Sample closet</Chip>
+          </div>
+        </section>
+      )}
 
       {sheet === 'install' && <InstallSheet onClose={() => setSheet(null)} />}
       {sheet === 'notify' && <NotifySheet onClose={() => setSheet(null)} />}
       {sheet === 'plans' && <PaywallSheet onClose={() => setSheet(null)} />}
+      {sheet === 'city' && (
+        <Sheet title="Forecast for" onClose={() => setSheet(null)}>
+          <button className="btn secondary block" type="button" onClick={locateMe}><Icon name="pin" /> Use my location</button>
+          <form className="stack" onSubmit={(e) => { e.preventDefault(); void saveCity(); }}>
+            <label className="field">
+              <span>Or type a city</span>
+              <input value={city} onChange={(e) => setCity(e.target.value)} autoComplete="address-level2" />
+            </label>
+            <button className="btn primary block" type="submit">Save city</button>
+            {cityMsg && <p className="t-small muted" role="status">{cityMsg}</p>}
+          </form>
+        </Sheet>
+      )}
+      {sheet === 'style' && (
+        <Sheet title="How we pick looks" onClose={() => setSheet(null)}>
+          <ol className="timeline">
+            <li className="is-past"><span className="dot"><Icon name="sun" size={16} /></span><div><strong>Weather first</strong><span>Hour by hour for the time you’re out: warm enough at the coldest hour, not too hot once the coat is off, nothing that hates rain on a wet day.</span></div></li>
+            <li className="is-past"><span className="dot"><Icon name="hanger" size={16} /></span><div><strong>Then what goes together</strong><span>Colour (neutral base with one colour, tonal, neighbouring or softened opposites), light against dark, one loud piece at most, shoes at the same dress level, one pattern at a time.</span></div></li>
+            <li className="is-now"><span className="dot"><Icon name="heart" size={16} /></span><div><strong>Then you</strong><span>Every look you wear, love or skip teaches us your taste. It counts more than any rule.</span></div></li>
+          </ol>
+          <button className="btn quiet" onClick={() => { d({ type: 'patch', patch: { taste: {}, tasteEvidence: 0, loved: [] } }); d({ type: 'toast', text: 'Your style is reset' }); setSheet(null); }}>Reset what we’ve learned</button>
+        </Sheet>
+      )}
       {sheet === 'delete' && (
         <Sheet title="Delete all your data?" onClose={() => setSheet(null)}>
           <p className="t-body">This removes your closet, photos, wear history and account from this phone and our server. It can’t be undone.</p>
@@ -184,7 +227,7 @@ export function Settings() {
             <input value={typed} onChange={(e) => setTyped(e.target.value)} autoCapitalize="none" />
           </label>
           <button
-            className="btn danger"
+            className="btn danger block"
             disabled={typed.trim().toLowerCase() !== 'delete'}
             onClick={async () => {
               if (s.email && !s.demo) {

@@ -240,6 +240,38 @@ export async function buildApp(cfg: AppConfig): Promise<FastifyInstance> {
     return { ok: true };
   });
 
+  // ---------- Community taste prior (opt-in, anonymous) ----------
+  // Clients that opted in send look features with a yes/no label. Only feature counts are stored:
+  // no user id, no item ids, names or photos. The prior is what new users start from.
+  const FEATURE = /^[a-z]{3,10}:[a-z0-9+-]{1,40}$/;
+  const PRIOR_MIN = 20;
+  app.post('/api/taste', { config: { rateLimit: { max: 30, timeWindow: '1 hour' } } }, async (req, reply) => {
+    requireUser(req);
+    const events = (req.body as { events?: unknown })?.events;
+    if (!Array.isArray(events) || events.length === 0 || events.length > 50) return reply.code(400).send({ error: 'bad_events' });
+    const add = db.prepare(
+      'INSERT INTO taste_stats (feature, pos, neg) VALUES (?, ?, ?) ON CONFLICT(feature) DO UPDATE SET pos = pos + excluded.pos, neg = neg + excluded.neg',
+    );
+    let n = 0;
+    for (const e of events as { f?: unknown; y?: unknown }[]) {
+      if (!Array.isArray(e?.f) || e.f.length > 40 || (e.y !== 1 && e.y !== -1)) return reply.code(400).send({ error: 'bad_events' });
+      if (!e.f.every((x) => typeof x === 'string' && FEATURE.test(x))) return reply.code(400).send({ error: 'bad_feature' });
+    }
+    for (const e of events as { f: string[]; y: 1 | -1 }[]) {
+      for (const f of new Set(e.f)) add.run(f, e.y === 1 ? 1 : 0, e.y === -1 ? 1 : 0);
+      n++;
+    }
+    return { ok: true, accepted: n };
+  });
+
+  app.get('/api/taste/prior', async (_req, reply) => {
+    const rows = db.prepare('SELECT feature, pos, neg FROM taste_stats WHERE pos + neg >= ?').all(PRIOR_MIN) as unknown as { feature: string; pos: number; neg: number }[];
+    const weights: Record<string, number> = {};
+    for (const r of rows) weights[r.feature] = Math.round(Math.max(-1.5, Math.min(1.5, 0.5 * Math.log((r.pos + 1) / (r.neg + 1)))) * 1000) / 1000;
+    reply.header('Cache-Control', 'public, max-age=3600');
+    return { weights, minEvidence: PRIOR_MIN };
+  });
+
   // ---------- Billing ----------
   app.post('/api/billing/checkout', async (req, reply) => {
     requireUser(req);

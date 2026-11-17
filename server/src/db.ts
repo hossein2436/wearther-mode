@@ -55,6 +55,12 @@ export function openDb(file: string): DB {
       q TEXT PRIMARY KEY,
       body TEXT NOT NULL
     );
+    -- Opt-in, anonymous taste signals: counts per look feature, no user id, no items.
+    CREATE TABLE IF NOT EXISTS taste_stats (
+      feature TEXT PRIMARY KEY,
+      pos INTEGER NOT NULL DEFAULT 0,
+      neg INTEGER NOT NULL DEFAULT 0
+    );
   `);
   return db;
 }

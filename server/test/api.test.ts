@@ -151,6 +151,22 @@ describe('API', () => {
     expect(r.headers['content-type']).toBe('image/png');
   });
 
+  it('collects anonymous taste counts only from signed-in users and serves a prior', async () => {
+    const a = await app();
+    const anon = await a.inject({ method: 'POST', url: '/api/taste', headers: H, payload: { events: [{ f: ['scheme:accent'], y: 1 }] } });
+    expect(anon.statusCode).toBe(401);
+    const { cookie } = await signIn(a);
+    const bad = await a.inject({ method: 'POST', url: '/api/taste', headers: { ...H, cookie }, payload: { events: [{ f: ['Navy shirt id-123'], y: 1 }] } });
+    expect(bad.statusCode).toBe(400);
+    const events = Array.from({ length: 25 }, (_, i) => ({ f: ['scheme:accent', 'scheme:clash'], y: i < 22 ? 1 : -1 }));
+    const ok = await a.inject({ method: 'POST', url: '/api/taste', headers: { ...H, cookie }, payload: { events } });
+    expect(ok.json()).toMatchObject({ ok: true, accepted: 25 });
+    const prior = (await a.inject({ url: '/api/taste/prior' })).json();
+    expect(prior.weights['scheme:accent']).toBeGreaterThan(0);
+    const cols = db.prepare('PRAGMA table_info(taste_stats)').all() as { name: string }[];
+    expect(cols.map((c) => c.name)).toEqual(['feature', 'pos', 'neg']); // nothing that identifies a person
+  });
+
   it('says payments are not configured yet', async () => {
     const a = await app();
     const { cookie } = await signIn(a);

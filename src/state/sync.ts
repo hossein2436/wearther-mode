@@ -13,6 +13,10 @@ export function snapshot(s: State) {
     thermal: s.thermal,
     learnedOffset: s.learnedOffset,
     pairWeights: s.pairWeights,
+    taste: s.taste,
+    tasteEvidence: s.tasteEvidence,
+    shareTaste: s.shareTaste,
+    loved: s.loved,
     units: s.units,
     place: s.place,
     autoWashAfter: s.autoWashAfter,
@@ -30,7 +34,7 @@ export function restore(data: Record<string, unknown>): Partial<State> {
   return {
     closet,
     ...pick('worn'), ...pick('win'), ...pick('thermal'), ...pick('learnedOffset'),
-    ...pick('pairWeights'), ...pick('units'), ...pick('place'), ...pick('autoWashAfter'),
+    ...pick('pairWeights'), ...pick('taste'), ...pick('tasteEvidence'), ...pick('shareTaste'), ...pick('loved'), ...pick('units'), ...pick('place'), ...pick('autoWashAfter'),
   } as Partial<State>;
 }
 
@@ -56,6 +60,23 @@ export function useServerSync() {
     const t = setTimeout(() => void api.putCloset(JSON.parse(snap)).catch(() => undefined), 2000);
     return () => clearTimeout(t);
   }, [snap, s.demo, s.email, s.onboarded]);
+
+  // Community prior: refresh once per launch (public, anonymous, cached for an hour by the server).
+  useEffect(() => {
+    if (s.demo) return;
+    api.tastePrior().then(({ weights }) => d({ type: 'patch', patch: { prior: weights } })).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.demo]);
+
+  // Opt-in only: send queued, anonymous look features in batches.
+  useEffect(() => {
+    if (s.demo || !s.email || !s.shareTaste || s.tasteQueue.length < 5) return;
+    const batch = s.tasteQueue.slice(0, 50);
+    api.sendTaste(batch)
+      .then(() => d({ type: 'tasteSent', n: batch.length }))
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.tasteQueue.length, s.shareTaste, s.email, s.demo]);
 
   // Upload photos that aren't on the server yet.
   useEffect(() => {

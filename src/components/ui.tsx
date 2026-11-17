@@ -7,7 +7,7 @@ export function TabBar() {
   const { s, d } = useStore();
   const tabs: { route: Route; label: string; icon: string }[] = [
     { route: 'today', label: 'Today', icon: 'today' },
-    { route: 'closet', label: 'Closet', icon: 'closet' },
+    { route: 'closet', label: 'Closet', icon: 'hanger' },
     { route: 'add', label: 'Add', icon: 'add' },
     { route: 'settings', label: 'Settings', icon: 'settings' },
   ];
@@ -61,7 +61,7 @@ export function Sheet({
       >
         <div className="sheet-handle" aria-hidden="true" />
         <div className="sheet-head">
-          <h2 id={labelledBy} className="t-heading">{title}</h2>
+          <h2 id={labelledBy} className="t-title">{title}</h2>
           {onClose && (
             <button className="icon-btn" aria-label="Close" onClick={onClose}>
               <Icon name="close" />
@@ -85,14 +85,14 @@ export function Toast() {
 
 export function Header({ title, back, children }: { title: string; back?: () => void; children?: ReactNode }) {
   return (
-    <header className="screen-head">
+    <header className="head">
       {back && (
         <button className="icon-btn" aria-label="Back" onClick={back}>
           <Icon name="back" />
         </button>
       )}
-      <h1 className="t-title">{title}</h1>
-      <div className="head-actions">{children}</div>
+      <h1 className={back ? 't-title' : 't-display'}>{title}</h1>
+      {children}
     </header>
   );
 }

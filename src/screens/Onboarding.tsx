@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { useStore } from '../state/store';
-import { Progress, Chip } from '../components/ui';
+import { Progress } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { Garment } from '../components/Garment';
 import { STARTER, SLOT_LABEL } from '../data/catalog';
@@ -9,28 +9,28 @@ import { AddFlow } from './AddFlow';
 import { requestPersistence } from '../state/db';
 import { api, ApiError } from '../api';
 import { restore } from '../state/sync';
+import type { Thermal } from '../types';
 
 export function Welcome() {
   const { d } = useStore();
+  const look: { kind: Parameters<typeof Garment>[0]['kind']; color: string; style: CSSProperties }[] = [
+    { kind: 'trench', color: '#B49A6C', style: { left: '4%', top: '6%', width: '48%', height: '50%', ['--rot' as string]: '-7deg' } },
+    { kind: 'knit', color: '#7A8B6F', style: { left: '42%', top: '0%', width: '44%', height: '44%', ['--rot' as string]: '5deg', animationDelay: '-2s' } },
+    { kind: 'jeans', color: '#3E5A7E', style: { left: '22%', top: '44%', width: '40%', height: '52%', ['--rot' as string]: '-2deg', animationDelay: '-4s' } },
+    { kind: 'boots', color: '#5C4033', style: { left: '60%', top: '62%', width: '30%', height: '30%', ['--rot' as string]: '9deg', animationDelay: '-1s' } },
+  ];
   return (
     <main className="screen welcome">
-      <div className="welcome-art" aria-hidden="true">
-        <div className="welcome-ribbon" />
-        <div className="welcome-pieces">
-          <Garment kind="trench" color="#B49A6C" />
-          <Garment kind="knit" color="#7A7E86" />
-          <Garment kind="jeans" color="#3E5A7E" />
-          <Garment kind="boots" color="#5C4033" />
-        </div>
+      <div className="welcome-sky" aria-hidden="true" />
+      <div className="welcome-look" aria-hidden="true">
+        {look.map((g) => <span key={g.kind} className="float" style={g.style}><Garment kind={g.kind} color={g.color} /></span>)}
       </div>
-      <h1 className="t-display-sm">Your closet, dressed for today’s weather.</h1>
-      <p className="t-body muted">
-        Photograph your clothes once. Every morning, Wearther Mode picks an outfit from them for the hours you’re actually outside.
-      </p>
-      <div className="stack-actions">
-        <button className="btn primary" onClick={() => d({ type: 'go', route: 'onb-day' })}>Start with 15 items</button>
-        <p className="t-small muted center">Free for 7 days. No card needed.</p>
-        <button className="btn ghost" onClick={() => d({ type: 'go', route: 'signin' })}>I already have an account</button>
+      <h1>Dressed for the forecast.</h1>
+      <p className="t-body">Photograph your clothes once. Every morning, Wearther Mode picks a look from them for the hours you’re actually outside.</p>
+      <div className="stack">
+        <button className="btn primary lg" onClick={() => d({ type: 'go', route: 'onb-day' })}>Get started</button>
+        <button className="btn quiet" onClick={() => d({ type: 'go', route: 'signin' })}>I already have an account</button>
+        <p className="t-micro center muted">Free for 7 days. No card needed.</p>
       </div>
     </main>
   );
@@ -39,53 +39,75 @@ export function Welcome() {
 const HOURS = Array.from({ length: 19 }, (_, i) => i + 5);
 const hh = (h: number) => `${String(h).padStart(2, '0')}:00`;
 
-/** Step 1 of 3: the hours you're out and how you feel the cold, on one screen. */
+const FEEL: { v: Thermal; t: string; sub: string; fill: string; level: string }[] = [
+  { v: 'cold', t: 'I feel the cold', sub: 'Usually the one in a jumper', fill: '25%', level: 'var(--sky-frost)' },
+  { v: 'neutral', t: 'About average', sub: 'Dress me like the forecast says', fill: '55%', level: 'var(--sky-fresh)' },
+  { v: 'warm', t: 'I run warm', sub: 'T-shirt while others wear coats', fill: '85%', level: 'var(--sky-heat)' },
+];
+
+/** Step 1 of 3: the hours you're out, and how you feel the cold. */
 export function OnbDay() {
   const { s, d } = useStore();
-  const opts = [
-    { v: 'cold', t: 'I feel the cold' },
-    { v: 'neutral', t: 'About average' },
-    { v: 'warm', t: 'I run warm' },
-  ] as const;
   return (
     <main className="screen">
       <Progress step={1} of={3} />
-      <h1 className="t-title">Your day</h1>
-      <p className="t-body muted">We dress you for the hours you’re outside, not just the morning.</p>
-      <div className="field-row">
-        <label className="field">
-          <span>I leave at</span>
+      <h1 className="t-display">When are you outside?</h1>
+      <p className="t-body muted head-sub">We dress you for these hours, not just the morning.</p>
+      <div className="time-pair">
+        <label className="time-big">
+          <span>Out at</span>
           <select value={s.win.leave} onChange={(e) => d({ type: 'patch', patch: { win: { ...s.win, leave: +e.target.value } } })}>
             {HOURS.filter((h) => h < s.win.back).map((h) => <option key={h} value={h}>{hh(h)}</option>)}
           </select>
         </label>
-        <label className="field">
-          <span>I’m back at</span>
+        <span className="dash" aria-hidden="true">to</span>
+        <label className="time-big">
+          <span>Back at</span>
           <select value={s.win.back} onChange={(e) => d({ type: 'patch', patch: { win: { ...s.win, back: +e.target.value } } })}>
             {HOURS.filter((h) => h > s.win.leave).map((h) => <option key={h} value={h}>{hh(h)}</option>)}
           </select>
         </label>
       </div>
-      <fieldset className="tag-group">
+      <fieldset className="group">
         <legend>How do you feel the cold?</legend>
-        <div className="seg seg-wide" role="radiogroup" aria-label="How you feel the cold">
-          {opts.map((o) => (
-            <button key={o.v} role="radio" aria-checked={s.thermal === o.v} aria-pressed={s.thermal === o.v} onClick={() => d({ type: 'patch', patch: { thermal: o.v } })}>
-              {o.t}
-            </button>
-          ))}
-        </div>
-        <p className="t-small muted">We fine-tune this from your morning check-ins.</p>
+        <ThermalCards />
       </fieldset>
-      <div className="stack-actions">
-        <button className="btn primary" onClick={() => d({ type: 'go', route: 'onb-place' })}>Continue</button>
+      <div className="sticky-cta">
+        <button className="btn primary lg" onClick={() => d({ type: 'go', route: 'onb-place' })}>Continue</button>
       </div>
     </main>
   );
 }
 
-/** Kept for old links: the thermal question now lives on the first step. */
 export const OnbThermal = OnbDay;
+
+export function ThermalCards() {
+  const { s, d } = useStore();
+  return (
+    <div className="feel-cards" role="radiogroup" aria-label="How you feel the cold">
+      {FEEL.map((o) => (
+        <button key={o.v} role="radio" aria-checked={s.thermal === o.v} className="feel-card" onClick={() => d({ type: 'patch', patch: { thermal: o.v } })}>
+          <span className="thermo" aria-hidden="true" style={{ ['--fill' as string]: o.fill, ['--level' as string]: o.level } as CSSProperties}><i /></span>
+          <span><strong>{o.t}</strong><span>{o.sub}</span></span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Compact version for Settings. */
+export function ThermalChips() {
+  const { s, d } = useStore();
+  return (
+    <div className="seg" role="radiogroup" aria-label="How you feel the cold">
+      {FEEL.map((o) => (
+        <button key={o.v} role="radio" aria-checked={s.thermal === o.v} onClick={() => d({ type: 'patch', patch: { thermal: o.v } })}>
+          {o.v === 'cold' ? 'Feel the cold' : o.v === 'warm' ? 'Run warm' : 'Average'}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function OnbPlace() {
   const { s, d } = useStore();
@@ -128,23 +150,19 @@ export function OnbPlace() {
   return (
     <main className="screen">
       <Progress step={2} of={3} />
-      <h1 className="t-title">Where are you?</h1>
-      <p className="t-body muted">
-        We use your location to get the forecast. Only a rough area, about the size of a town, is sent to our server.
-      </p>
-      <div className="stack-actions">
-        <button className="btn primary" onClick={locateMe} disabled={busy !== null}>
-          {busy === 'gps' ? 'Finding you…' : 'Use my location'}
-        </button>
-      </div>
-      <form className="city-form" onSubmit={(e) => { e.preventDefault(); void lookUpCity(); }}>
+      <h1 className="t-display">Whose sky are we reading?</h1>
+      <p className="t-body muted head-sub">Only a rough area, about the size of a town, is sent for the forecast.</p>
+      <button className="btn primary lg block" onClick={locateMe} disabled={busy !== null}>
+        <Icon name="pin" /> {busy === 'gps' ? 'Finding you…' : 'Use my location'}
+      </button>
+      <form className="stack" onSubmit={(e) => { e.preventDefault(); void lookUpCity(); }}>
         <label className="field">
-          <span>Or type your city instead</span>
-          <input value={city} onChange={(e) => setCity(e.target.value)} autoComplete="address-level2" />
+          <span>Or type your city</span>
+          <input value={city} onChange={(e) => setCity(e.target.value)} autoComplete="address-level2" placeholder="London" />
         </label>
-        <button className="btn secondary" type="submit" disabled={busy !== null}>{busy === 'city' ? 'Looking it up…' : 'Use this city'}</button>
+        <button className="btn secondary block" type="submit" disabled={busy !== null}>{busy === 'city' ? 'Looking it up…' : 'Use this city'}</button>
       </form>
-      {error && <p className="note" role="alert">{error}</p>}
+      {error && <p className="note alert" role="alert">{error}</p>}
     </main>
   );
 }
@@ -153,26 +171,20 @@ export function Starter() {
   const { s, d } = useStore();
   const missing = missingSlots(s.closet);
   const count = (slot: string) => s.closet.filter((i) => i.slot === slot).length;
-  const done = s.closet.length;
   return (
     <main className="screen">
       <Progress step={3} of={3} />
-      <h1 className="t-title">Add the clothes you wear most</h1>
-      <p className="t-body muted">
-        Fifteen pieces is plenty to start. You do this once, and you can add new things whenever you buy them.
-      </p>
-      <ul className="starter-list">
+      <h1 className="t-display">Add what you wear most</h1>
+      <p className="t-body muted head-sub">Fifteen pieces is plenty. You do this once, then only when you buy something new.</p>
+      <ul className="starter">
         {STARTER.map((row) => {
           const c = count(row.slot);
           const ok = c >= row.want;
           return (
             <li key={row.slot} className={ok ? 'is-done' : ''}>
-              <span className="starter-check" aria-hidden="true">{ok ? <Icon name="check" size={16} /> : null}</span>
-              <span className="starter-text">
-                <span className="starter-title">{SLOT_LABEL[row.slot]}</span>
-                <span className="starter-hint">{row.hint}</span>
-              </span>
-              <span className="starter-count" aria-label={`${c} of ${row.want}`}>{c}/{row.want}</span>
+              <span className="tick" aria-hidden="true">{ok ? <Icon name="check" size={14} /> : null}</span>
+              <span><strong>{SLOT_LABEL[row.slot]}</strong><small>{row.hint}</small></span>
+              <span className="num" aria-label={`${c} of ${row.want}`}>{c}/{row.want}</span>
             </li>
           );
         })}
@@ -181,20 +193,18 @@ export function Starter() {
       <AddFlow compact />
 
       <div className="sticky-cta">
-        {missing.length ? (
-          <p className="t-small muted center">To see an outfit, add {missing.join(', ')}.</p>
-        ) : (
-          <p className="t-small muted center">{done} pieces added. Add more any time.</p>
-        )}
+        <p className="t-small muted center">
+          {missing.length ? `To see a look, add ${missing.join(', ')}.` : `${s.closet.length} pieces added. Add more any time.`}
+        </p>
         <button
-          className="btn primary"
+          className="btn primary lg"
           disabled={missing.length > 0}
           onClick={() => {
             void requestPersistence();
             d({ type: 'go', route: s.email ? 'today' : 'signin' });
           }}
         >
-          See today’s outfit
+          See today’s look
         </button>
       </div>
     </main>
@@ -248,43 +258,32 @@ export function SignIn() {
 
   return (
     <main className="screen">
-      <h1 className="t-title">Save your closet</h1>
-      <p className="t-body muted">
-        Your photos stay on this phone and are backed up to your account, so they’re still here if you change phones. Saving starts your free week.
+      <h1 className="t-display">{s.closet.length ? 'Save your closet' : 'Welcome back'}</h1>
+      <p className="t-body muted head-sub">
+        {s.closet.length
+          ? 'Your photos stay on this phone and are backed up to your account, so they’re safe if you change phones. Saving starts your free week.'
+          : 'Sign in and we’ll bring your closet back.'}
       </p>
       {!sent ? (
-        <form className="city-form" onSubmit={(e) => { e.preventDefault(); if (valid) void send(); }}>
+        <form className="stack" onSubmit={(e) => { e.preventDefault(); if (valid) void send(); }}>
           <label className="field">
             <span>Email</span>
             <input type="email" inputMode="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </label>
-          <button className="btn primary" type="submit" disabled={!valid || busy}>{busy ? 'Sending…' : 'Email me a code'}</button>
+          <button className="btn primary lg" type="submit" disabled={!valid || busy}>{busy ? 'Sending…' : 'Email me a code'}</button>
         </form>
       ) : (
-        <form className="city-form" onSubmit={(e) => { e.preventDefault(); if (code.length === 6) void verify(); }}>
-          <p className="t-body">We sent a 6-digit code to {email}.</p>
+        <form className="stack" onSubmit={(e) => { e.preventDefault(); if (code.length === 6) void verify(); }}>
+          <p className="t-body">We sent a 6-digit code to <strong>{email}</strong>.</p>
           <label className="field">
             <span>Code</span>
             <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} />
           </label>
-          <button className="btn primary" type="submit" disabled={code.length !== 6 || busy}>{busy ? 'Checking…' : 'Start my free week'}</button>
-          <button className="btn ghost" type="button" onClick={() => { setSent(false); setCode(''); }}>Use a different email</button>
+          <button className="btn primary lg" type="submit" disabled={code.length !== 6 || busy}>{busy ? 'Checking…' : s.closet.length ? 'Start my free week' : 'Sign in'}</button>
+          <button className="btn quiet" type="button" onClick={() => { setSent(false); setCode(''); }}>Use a different email</button>
         </form>
       )}
-      {error && <p className="note" role="alert">{error}</p>}
+      {error && <p className="note alert" role="alert">{error}</p>}
     </main>
-  );
-}
-
-export function ThermalChips() {
-  const { s, d } = useStore();
-  return (
-    <div className="chips">
-      {(['cold', 'neutral', 'warm'] as const).map((t) => (
-        <Chip key={t} on={s.thermal === t} onClick={() => d({ type: 'patch', patch: { thermal: t } })}>
-          {t === 'cold' ? 'I feel the cold' : t === 'warm' ? 'I run warm' : 'About average'}
-        </Chip>
-      ))}
-    </div>
   );
 }
