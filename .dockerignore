@@ -1,0 +1,7 @@
+node_modules
+dist
+dist-artifact
+docs/screens
+.git
+.env
+*.log

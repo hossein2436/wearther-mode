@@ -1,0 +1,51 @@
+/* Wearther Mode design tokens — see docs/design-system.md */
+:root {
+  color-scheme: light dark;
+
+  --fog: #eef1f4;
+  --paper: #ffffff;
+  --ink: #1b2430;
+  --ink-2: #5a6675;
+  --line: #d5dbe2;
+  --rain: #3d6fb6;
+  --danger: #b3261e;
+  --on-ink: #ffffff;
+  --scrim: rgb(27 36 48 / 0.36);
+
+  --font: 'Schibsted Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* Type scale, 1.25 ratio, rem-based so it follows the user's text size */
+  --t-display: 3.5rem;   /* 56 */
+  --t-title: 1.75rem;    /* 28 */
+  --t-heading: 1.25rem;  /* 20 */
+  --t-body: 1.0625rem;   /* 17 */
+  --t-small: 0.875rem;   /* 14 */
+  --t-micro: 0.75rem;    /* 12 */
+
+  /* Spacing, 4-point base */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
+  --pad: 20px;
+
+  /* Radius grows with the size of the thing */
+  --r-chip: 999px;
+  --r-btn: 14px;
+  --r-tile: 16px;
+  --r-sheet: 24px;
+
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --tabbar-h: 64px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fog: #18202b;
+    --paper: #222c39;
+    --ink: #e8edf2;
+    --ink-2: #a3afbd;
+    --line: #344255;
+    --rain: #7fa9e6;
+    --danger: #f2b8b5;
+    --on-ink: #18202b;
+    --scrim: rgb(0 0 0 / 0.5);
+  }
+}
