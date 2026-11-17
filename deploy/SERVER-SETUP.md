@@ -120,10 +120,10 @@ docker compose exec api node dist/admin.js revoke you@x.com
 Everything that matters is in the `api_data` volume (database, closet photos, keys):
 ```bash
 mkdir -p ~/backups
-docker run --rm -v app_api_data:/data -v ~/backups:/backup alpine tar czf /backup/wearther-$(date +%F).tgz -C /data .
+docker run --rm -v wearther_api_data:/data -v ~/backups:/backup alpine tar czf /backup/wearther-$(date +%F).tgz -C /data .
 ```
-The volume name is `<folder>_api_data`; with the folder `/opt/wearther/app` it's `app_api_data` (`docker volume ls` shows it).
-Restore: stop the stack, then `docker run --rm -v app_api_data:/data -v ~/backups:/backup alpine sh -c "cd /data && tar xzf /backup/wearther-YYYY-MM-DD.tgz"`.
+The volume name is `<folder>_api_data`; with the folder `/opt/wearther/app` it's `wearther_api_data` (`docker volume ls` shows it).
+Restore: stop the stack, then `docker run --rm -v wearther_api_data:/data -v ~/backups:/backup alpine sh -c "cd /data && tar xzf /backup/wearther-YYYY-MM-DD.tgz"`.
 
 ## Troubleshooting
 | Symptom | Fix |

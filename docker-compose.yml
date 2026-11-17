@@ -1,3 +1,5 @@
+name: wearther   # fixed project name: containers, network and volumes are all prefixed "wearther"
+
 services:
   web:
     build:
