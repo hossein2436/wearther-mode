@@ -6,14 +6,15 @@ import { useStore, type Route } from '../state/store';
 export function TabBar() {
   const { s, d } = useStore();
   const tabs: { route: Route; label: string; icon: string }[] = [
-    { route: 'today', label: 'Today', icon: 'today' },
+    { route: 'today', label: 'Today', icon: 'sunny' },
     { route: 'closet', label: 'Closet', icon: 'hanger' },
-    { route: 'add', label: 'Add', icon: 'add' },
-    { route: 'settings', label: 'Settings', icon: 'settings' },
+    { route: 'add', label: 'Add', icon: 'plusbox2' },
+    { route: 'settings', label: 'You', icon: 'sliders' },
   ];
   const active = s.route === 'item' ? 'closet' : s.route;
   return (
     <nav className="tabbar" aria-label="Main">
+      <span className="tab-blob" aria-hidden="true" style={{ ['--i' as string]: Math.max(0, tabs.findIndex((t) => t.route === active)) }} />
       {tabs.map((t) => (
         <button
           key={t.route}
@@ -21,7 +22,7 @@ export function TabBar() {
           aria-current={active === t.route ? 'page' : undefined}
           onClick={() => d({ type: 'go', route: t.route })}
         >
-          <Icon name={t.icon} />
+          <Icon name={t.icon} size={24} duo={active === t.route} />
           <span>{t.label}</span>
         </button>
       ))}

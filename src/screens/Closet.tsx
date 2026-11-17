@@ -2,11 +2,13 @@ import { useState, type CSSProperties } from 'react';
 import { useStore } from '../state/store';
 import type { Item, ItemStatus, Slot } from '../types';
 import { Header, Chip, Sheet } from '../components/ui';
-import { ItemVisual } from '../components/Garment';
+import { Garment, ItemVisual } from '../components/Garment';
 import { Icon } from '../components/Icon';
 import { TagEditor } from './TagEditor';
 import { toOklch } from '../engine/style';
 import { api } from '../api';
+
+const SECTION_ICON: Record<Slot, Item['kind']> = { outer: 'trench', mid: 'knit', top: 'tshirt', onepiece: 'dress', bottom: 'jeans', shoes: 'sneakers' };
 
 const SECTIONS: { slot: Slot; label: string }[] = [
   { slot: 'outer', label: 'Jackets and coats' },
@@ -40,7 +42,7 @@ export function Closet() {
         <Chip on={f === 'all'} onClick={() => setF('all')}>All</Chip>
         {SECTIONS.filter((x) => count(x.slot)).map((x) => (
           <Chip key={x.slot} on={f === x.slot} onClick={() => setF(x.slot)}>
-            {x.label} <span className="count">{count(x.slot)}</span>
+            <Garment kind={SECTION_ICON[x.slot]} color={f === x.slot ? '#ffffff' : '#9aa0aa'} />{x.label} <span className="count">{count(x.slot)}</span>
           </Chip>
         ))}
         {inWash > 0 && <Chip on={f === 'wash'} onClick={() => setF('wash')}>In the wash <span className="count">{inWash}</span></Chip>}

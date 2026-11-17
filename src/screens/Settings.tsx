@@ -60,27 +60,31 @@ export function Settings() {
 
   return (
     <main className="screen has-tabs">
-      <Header title="Settings" />
+      <Header title="You" />
 
       <h2 className="list-head">Your day</h2>
       <div className="list">
         <div className="list-row">
+          <span className="row-icon" style={{ ['--a' as string]: '#ffd23f', ['--b' as string]: '#ff9f0a' }}><Icon name="sunny" size={20} /></span>
           <span className="label"><strong>Out at</strong></span>
           <select aria-label="Out at" value={s.win.leave} onChange={(e) => d({ type: 'patch', patch: { win: { ...s.win, leave: +e.target.value } } })}>
             {HOURS.filter((h) => h < s.win.back).map((h) => <option key={h} value={h}>{hh(h)}</option>)}
           </select>
         </div>
         <div className="list-row">
+          <span className="row-icon" style={{ ['--a' as string]: '#7b95ff', ['--b' as string]: '#4b63ff' }}><Icon name="today" size={20} /></span>
           <span className="label"><strong>Back at</strong></span>
           <select aria-label="Back at" value={s.win.back} onChange={(e) => d({ type: 'patch', patch: { win: { ...s.win, back: +e.target.value } } })}>
             {HOURS.filter((h) => h > s.win.leave).map((h) => <option key={h} value={h}>{hh(h)}</option>)}
           </select>
         </div>
         <button className="list-row tap" onClick={() => { setCityMsg(''); setSheet('city'); }}>
+          <span className="row-icon" style={{ ['--a' as string]: '#2fbfae', ['--b' as string]: '#11a08f' }}><Icon name="pin" size={20} /></span>
           <span className="label"><strong>Forecast for</strong><small>{s.place || (s.coords ? 'Your location' : 'Not set')}</small></span>
           <Icon name="chevron" />
         </button>
         <div className="list-row">
+          <span className="row-icon" style={{ ['--a' as string]: '#ff8a5c', ['--b' as string]: '#ff3d00' }}><Icon name="light" size={20} /></span>
           <span className="label"><strong>Temperature</strong></span>
           <div className="seg" role="radiogroup" aria-label="Temperature units" style={{ width: 132 }}>
             <button role="radio" aria-checked={s.units === 'C'} onClick={() => d({ type: 'patch', patch: { units: 'C' } })}>°C</button>
@@ -110,6 +114,7 @@ export function Settings() {
           )}
         </div>
         <label className="list-row">
+          <span className="row-icon" style={{ ['--a' as string]: '#b07bff', ['--b' as string]: '#7b3dff' }}><Icon name="sparkle" size={20} /></span>
           <span className="label">
             <strong>Help improve picks for everyone</strong>
             <small>Shares which kinds of looks you choose, never photos or item names.</small>
@@ -122,6 +127,7 @@ export function Settings() {
           />
         </label>
         <button className="list-row tap" onClick={() => setSheet('style')}>
+          <span className="row-icon" style={{ ['--a' as string]: '#ff6fa3', ['--b' as string]: '#ff3d7f' }}><Icon name="hanger" size={20} /></span>
           <span className="label"><strong>How we pick looks</strong></span>
           <Icon name="chevron" />
         </button>
@@ -130,6 +136,7 @@ export function Settings() {
       <h2 className="list-head">Mornings</h2>
       <div className="list">
         <div className="list-row">
+          <span className="row-icon" style={{ ['--a' as string]: '#ffc53a', ['--b' as string]: '#ff9d00' }}><Icon name="bell" size={20} /></span>
           <span className="label"><strong>Morning look</strong><small>{s.notifyAt ? `Every day at ${s.notifyAt}` : 'Off'}</small></span>
           {s.notifyAt ? (
             <button className="btn quiet" onClick={() => { if (!s.demo) void api.pushUnsubscribe().catch(() => undefined); d({ type: 'patch', patch: { notifyAt: null } }); }}>Turn off</button>
@@ -138,6 +145,7 @@ export function Settings() {
           )}
         </div>
         <button className="list-row tap" onClick={() => setSheet('install')}>
+          <span className="row-icon" style={{ ['--a' as string]: '#5b6bff', ['--b' as string]: '#2a35d8' }}><Icon name="plusbox2" size={20} /></span>
           <span className="label"><strong>Add to Home Screen</strong></span>
           <Icon name="chevron" />
         </button>
@@ -146,11 +154,13 @@ export function Settings() {
       <h2 className="list-head">Account</h2>
       <div className="list">
         <div className="list-row">
+          <span className="row-icon" style={{ ['--a' as string]: '#ffcf4a', ['--b' as string]: '#f59e0b' }}><Icon name="crown" size={20} /></span>
           <span className="label"><strong>Subscription</strong><small>{subText}</small></span>
           {!s.subscribed && <button className="btn secondary" onClick={() => setSheet('plans')}>See plans</button>}
         </div>
         {s.email && (
           <div className="list-row">
+            <span className="row-icon" style={{ ['--a' as string]: '#9aa3b5', ['--b' as string]: '#5b6475' }}><Icon name="user" size={20} /></span>
             <span className="label"><strong>Signed in</strong><small>{s.email}</small></span>
             <button className="btn quiet" onClick={() => { if (!s.demo) void api.logout().catch(() => undefined); d({ type: 'patch', patch: { email: null } }); }}>Sign out</button>
           </div>
@@ -163,10 +173,12 @@ export function Settings() {
       </p>
       <div className="list">
         <button className="list-row tap" onClick={exportCloset}>
+          <span className="row-icon" style={{ ['--a' as string]: '#2fbf71', ['--b' as string]: '#14935a' }}><Icon name="share" size={20} /></span>
           <span className="label"><strong>Export my closet</strong></span>
           <Icon name="share" />
         </button>
         <button className="list-row tap danger" onClick={() => setSheet('delete')}>
+          <span className="row-icon" style={{ ['--a' as string]: '#ff7a6b', ['--b' as string]: '#e5402a' }}><Icon name="trash" size={20} /></span>
           <span className="label"><strong>Delete all my data</strong></span>
         </button>
       </div>

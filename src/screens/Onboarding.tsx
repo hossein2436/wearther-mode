@@ -10,6 +10,8 @@ import { requestPersistence } from '../state/db';
 import { api, ApiError } from '../api';
 import { restore } from '../state/sync';
 import type { Thermal } from '../types';
+import { useEffect } from 'react';
+import { WeatherGlyph, type GlyphKind } from '../components/WeatherGlyph';
 
 export function Welcome() {
   const { d } = useStore();
@@ -23,26 +25,40 @@ export function Welcome() {
     <main className="screen welcome">
       <div className="welcome-sky" aria-hidden="true" />
       <div className="welcome-look" aria-hidden="true">
+        <CyclingGlyph />
         {look.map((g) => <span key={g.kind} className="float" style={g.style}><Garment kind={g.kind} color={g.color} /></span>)}
       </div>
+      <div className="welcome-panel">
       <h1>Dressed for the forecast.</h1>
-      <p className="t-body">Photograph your clothes once. Every morning, Wearther Mode picks a look from them for the hours you’re actually outside.</p>
-      <div className="stack">
-        <button className="btn primary lg" onClick={() => d({ type: 'go', route: 'onb-day' })}>Get started</button>
-        <button className="btn quiet" onClick={() => d({ type: 'go', route: 'signin' })}>I already have an account</button>
-        <p className="t-micro center muted">Free for 7 days. No card needed.</p>
+        <p className="t-body">Photograph your clothes once. Every morning, Wearther Mode picks a look from them for the hours you’re actually outside.</p>
+        <div className="stack">
+          <button className="btn primary lg" onClick={() => d({ type: 'go', route: 'onb-day' })}>Get started</button>
+          <button className="btn quiet" onClick={() => d({ type: 'go', route: 'signin' })}>I already have an account</button>
+          <p className="t-micro center muted">Free for 7 days. No card needed.</p>
+        </div>
       </div>
     </main>
   );
 }
 
+const CYCLE: GlyphKind[] = ['sun', 'rain', 'snow', 'partly', 'heat'];
+function CyclingGlyph() {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const t = setInterval(() => setI((x) => (x + 1) % CYCLE.length), 2600);
+    return () => clearInterval(t);
+  }, []);
+  return <WeatherGlyph key={i} kind={CYCLE[i]} />;
+}
+
 const HOURS = Array.from({ length: 19 }, (_, i) => i + 5);
 const hh = (h: number) => `${String(h).padStart(2, '0')}:00`;
 
-const FEEL: { v: Thermal; t: string; sub: string; fill: string; level: string }[] = [
-  { v: 'cold', t: 'I feel the cold', sub: 'Usually the one in a jumper', fill: '25%', level: 'var(--sky-frost)' },
-  { v: 'neutral', t: 'About average', sub: 'Dress me like the forecast says', fill: '55%', level: 'var(--sky-fresh)' },
-  { v: 'warm', t: 'I run warm', sub: 'T-shirt while others wear coats', fill: '85%', level: 'var(--sky-heat)' },
+const FEEL: { v: Thermal; t: string; sub: string; glyph: GlyphKind }[] = [
+  { v: 'cold', t: 'I feel the cold', sub: 'Usually the one in a jumper', glyph: 'snow' },
+  { v: 'neutral', t: 'About average', sub: 'Dress me like the forecast says', glyph: 'partly' },
+  { v: 'warm', t: 'I run warm', sub: 'T-shirt while others wear coats', glyph: 'heat' },
 ];
 
 /** Step 1 of 3: the hours you're out, and how you feel the cold. */
@@ -87,7 +103,7 @@ export function ThermalCards() {
     <div className="feel-cards" role="radiogroup" aria-label="How you feel the cold">
       {FEEL.map((o) => (
         <button key={o.v} role="radio" aria-checked={s.thermal === o.v} className="feel-card" onClick={() => d({ type: 'patch', patch: { thermal: o.v } })}>
-          <span className="thermo" aria-hidden="true" style={{ ['--fill' as string]: o.fill, ['--level' as string]: o.level } as CSSProperties}><i /></span>
+          <WeatherGlyph kind={o.glyph} />
           <span><strong>{o.t}</strong><span>{o.sub}</span></span>
         </button>
       ))}
@@ -167,6 +183,8 @@ export function OnbPlace() {
   );
 }
 
+const ICON: Record<string, Parameters<typeof Garment>[0]['kind']> = { top: 'tshirt', bottom: 'jeans', mid: 'knit', outer: 'trench', shoes: 'sneakers', onepiece: 'dress' };
+
 export function Starter() {
   const { s, d } = useStore();
   const missing = missingSlots(s.closet);
@@ -182,9 +200,9 @@ export function Starter() {
           const ok = c >= row.want;
           return (
             <li key={row.slot} className={ok ? 'is-done' : ''}>
-              <span className="tick" aria-hidden="true">{ok ? <Icon name="check" size={14} /> : null}</span>
-              <span><strong>{SLOT_LABEL[row.slot]}</strong><small>{row.hint}</small></span>
-              <span className="num" aria-label={`${c} of ${row.want}`}>{c}/{row.want}</span>
+              <Garment kind={ICON[row.slot]} color={ok ? '#2fbf71' : '#c9cdd4'} />
+              <span><strong>{SLOT_LABEL[row.slot]} {ok && <Icon name="check" size={14} />}</strong><small>{row.hint}</small></span>
+              <span className="meter" role="img" aria-label={`${c} of ${row.want}`} style={{ ['--p' as string]: `${Math.min(100, (c / row.want) * 100)}%` } as CSSProperties}><i /></span>
             </li>
           );
         })}

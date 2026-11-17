@@ -6,11 +6,14 @@ import { Closet, ItemDetail } from './screens/Closet';
 import { AddScreen } from './screens/AddFlow';
 import { Settings } from './screens/Settings';
 import { useForecast, useServerSync } from './state/sync';
+import { useDay } from './state/day';
+import { ClayDefs } from './components/Garment';
 
 export default function App() {
   const { s } = useStore();
   useServerSync();
   useForecast();
+  const { mood } = useDay();
   const main = ['today', 'closet', 'item', 'add', 'settings'].includes(s.route);
   const screen = (() => {
     switch (s.route) {
@@ -28,7 +31,8 @@ export default function App() {
     }
   })();
   return (
-    <div className="app">
+    <div className={`app mood-${mood}`}>
+      <ClayDefs />
       {screen}
       {main && <TabBar />}
       <Toast />

@@ -1,106 +1,86 @@
-# Wearther Mode: Design System v2, "Dressed by the sky"
+# Wearther Mode: Design System v3, "Weather toy box"
 
-_v2, 17 Nov 2026. Replaces the v1 "Day Ribbon" system. Screens: `docs/screens/v2/`._
+_v3, 17 Nov 2026. Replaces v2. Screens: `docs/screens/v3/`._
 
-## Concept
-Weather apps give you a number; closet apps give you a grid. Wearther Mode v2 makes **the day's own sky the screen**.
-- **The sky:** on Today, the background is a vertical gradient of the feels-like temperature, from the hour you leave (top) to the hour you're back (bottom).
-- **The deck:** your clothes sit on that sky as a styled flat-lay in a swipeable deck.
-- **The rail:** a thin hour rail beside the deck marks the rain and when the coat is on.
+## Idea
+The day's **weather mood paints the whole app** in one saturated colour, and everything you touch is **soft, chunky and a little 3D** (clay): cards with a lit top edge, buttons with real depth, garments with a highlight. The weather is alive on Today:
+- rain streaks fall
+- snow drifts
+- warm light floats up
 
-One element is loud, the sky. Everything else is quiet chrome, so the clothes carry the screen.
+References (Mobbin, iOS):
+- [Sunlitt](https://mobbin.com/screens/6939e78b-ae10-4d7a-aea0-0493a5290bc2): full-screen saturated colour, pill chips
+- [(Not Boring) Weather](https://mobbin.com/screens/b998bfe3-fafc-4142-8891-4a87aecd2d9a): chunky playful 3D
+- [Tubi](https://mobbin.com/screens/7e852d98-72e7-4857-8069-1a32294755f3): the card deck
 
-### Plan, checked against generic defaults
-| First instinct | Why it was rejected | What we did |
-|---|---|---|
-| Horizontal ribbon under a big header (v1) | Pushed the outfit below the fold; the ribbon needed a legend | The day became the **background** and a **vertical rail** beside the deck; the legend is written as the day's plan ("Camel trench on all day", "Rain from 17:00") |
-| White card per outfit, three buttons under it | SaaS card kit; Plan B / Reshuffle / 👍 / 👎 competed | A **deck**: swipe left for another look, right to love it. The same three actions sit in a glass dock: ✕, **Wear this**, ♥ |
-| Cream + serif, or black + acid accent | The two most common generated looks | Overcast **mist** chrome, ink text, **one accent (cobalt)** for selection, rain and focus |
-| Small caps eyebrows, middle-dot meta strings | Template tells | Sentence case; place and date on two plain lines |
-| Lock icon on every piece | Four identical icons, noise | Tap a garment to keep it; a pin appears only on kept pieces |
-
-## Tokens (see `src/theme/tokens.css`)
-**Chrome:**
-- `--mist #ECEEEA`, dark `#101318`
-- `--surface #FFF`, dark `#1B1F26`
-- `--surface-2`
-- `--ink #1A1D21`; `--ink-2`; `--ink-3`
-- `--line`
-- `--cobalt #2742D6`, dark `#8EA0FF` (the only accent)
-- `--danger`
-
-**Sky ramp (data colour, feels-like):**
-
-| Temperature | Name | Light | Dark |
+## Moods (`tokens.css`)
+| Mood | When | Colours | Text |
 |---|---|---|---|
-| ≤ 0° | frost | `#A9C8F2` | `#1D3254` |
-| 8° | chill | `#BCDDE8` | `#1C3A44` |
-| 15° | fresh | `#CFE7C9` | `#22392C` |
-| 22° | warm | `#F7DE96` | `#43391A` |
-| ≥ 30° | heat | `#F8B993` | `#4A2C1D` |
+| rain | 2+ wet hours | `#2A35D8` to `#3F59EE` | white |
+| frost | mean feels < 4° | `#7B95FF` to `#B9C9FF` | `#0B1440` |
+| cool | < 14° | `#2FBFAE` to `#9CE6D2` | `#04302B` |
+| mild | < 20° | `#9BDC5B` to `#E2F59E` | `#16300A` |
+| sun | < 27° | `#FFC53A` to `#FFE58C` | `#3A2400` |
+| heat | ≥ 27° | `#FF6B3D` to `#FFA47A` | `#3A0E00` |
 
-Interpolated per hour in `components/Sky.tsx`.
+**Contrast:** text passes AA on both ends of every gradient (6.0 to 12.2:1), except the white text on rain's lighter end, which was darkened to `#3F59EE` to pass.
 
-**Type:** Archivo variable, self-hosted (`@fontsource-variable/archivo`, OFL), with width and weight axes.
+**Where the mood shows:**
+- The mood is set on `.app` (`state/day.ts`), so the tab bar's liquid blob, kept pieces, meters, toggles and timelines all take the day's colour.
+- Off Today, the canvas is the mood's light colour at 26% over warm white.
 
-| Style | Size | Width | Weight | Use |
-|---|---|---|---|---|
-| hero | 68 | 125% | 780 | Temperatures, tabular numerals |
-| display | 34 | 112% | 720 | Screen titles |
-| verdict | 22 | 106% | 640 | The day's sentence |
-| title | 22 | | | |
-| body | 17 | | 420 | Reading text |
-| small | 14 | | | |
-| micro | 12 | | | |
+**Dark mode:**
+- Moods are deepened with near-black.
+- Text is white.
+- Cards are `#1F2129`.
 
-**Space:** 4-point scale, 20px page padding.
+## Type
+Bricolage Grotesque variable (self-hosted, OFL).
 
-**Radius:** grows with the object.
-- 10: wells
-- 14: inputs
-- 22: tiles and lists
-- 32: look cards and sheets
-- pill: buttons, chips, tab bar, dock
+| Use | Size | Weight | Width |
+|---|---|---|---|
+| Temperatures (tabular figures) | 84 | 800 | 75% |
+| Titles | 38 | 800 | 80% |
+| Verdict | 26 | 800 | 80% |
+| Body | 17 | 440 | |
 
-**Elevation:** two tinted levels (`--lift-1`, `--lift-2`), no grey drop-shadow kit.
+## Clay surfaces and controls
+- **Cards:** radius 36. The `--clay` shadow is a lit top edge, a darker bottom edge, and a mood-tinted drop shadow.
+- **Buttons:** pills that sit on a 5px edge and press down 4px when tapped.
+  - The primary button has a slow shine sweep.
+  - Love is pink (`#FF3D7F`), the only colour that never changes with the mood.
+- **Selected chips, tiles and plans** lift 3px and get an ink outline with an ink edge.
+- **Toggles:** a bouncy knob on the mood colour.
+- **Settings rows:** each has a gradient squircle icon.
 
-**Motion:**
-- `--ease` is `cubic-bezier(.22,1,.36,1)`.
-- `--spring` is used for kept pieces, the stamp and toggles.
-- Durations are 160ms and 280ms.
+## Icons and illustration
+- **Weather glyphs** (`WeatherGlyph.tsx`): clay SVG with radial fills, specular highlight and contact shadow.
+  - sun: rays turn
+  - heat: sun pulses
+  - partly and cloud: cloud drifts
+  - rain: drops fall
+  - snow: flakes fall
+- **Garments:** shared `ClayDefs` gradients give every illustrated garment a soft top-left light and a rim highlight.
+- **UI icons:** rounded 2.1 strokes, with a duotone fill when active (tab bar, tips, place pill).
 
-## Components
-- **Floating tab bar:** a glass capsule inset 16px from the edges. The active tab gets a soft ink pill.
-- **Look deck** (`components/Look.tsx`):
-  - The top card is glass over the sky.
-  - The next two looks peek behind it, rotated, to show there are more.
-  - Drag past 28% of the width: left gives another look (a weak "skip" signal), right loves the look (strong signal plus a heart burst).
-  - Keyboard: ← and →.
-  - "Wear this" stamps the card ("Worn today", a spring stamp that settles into the corner).
-- **Composition:** pieces are laid out head to toe with slight rotation, using percentage boxes per slot combination (`composeLayout`). Each piece is a button: tap to keep it in the next looks.
-- **Hour rail:**
-  - ticks every 2 hours
-  - cobalt hatched segment for rain
-  - ink bar for the hours the coat is on
-  - ring for "now"
-  - The plan line under the deck doubles as its legend.
-- **Closet wall:**
-  - Three columns, grouped by slot and sorted dark to light, so the closet reads as a gradient.
-  - Each tile is tinted with the garment's own colour.
-- **Tag card:**
-  - The photo sits on its own colour tint.
-  - Six picture tiles for the family, then at most four kinds.
-  - A colour swatch.
-  - Name, warmth, dressiness, pattern and rain behaviour are folded into one summary line.
-- **Settings:** inset grouped lists, including **Your style** (what we've learned, the opt-in share toggle, how we pick looks) and **Forecast for** in a sheet.
-- **Paywall:** an honest trial timeline (Day 1, Day 6 reminder, Day 8 choose a plan, no card until then) plus two plan cards.
+## Motion and effects (all off with reduced motion)
+- **Sky particles:** a canvas layer per mood: rain, snow, or light motes. It pauses in background tabs.
+- **Temperature:** counts up on first load.
+- **Deck:**
+  - Pieces spring in, then idle-float.
+  - With a mouse, the card tilts toward the pointer and a glare follows.
+  - Drag left gives another look; drag right loves it with a heart burst and a haptic tap.
+- **Wear this:** confetti in the mood and outfit colours, a three-tap vibration, and a "Worn today" stamp that lands, then settles into the corner.
+- **Tab bar:** the blob slides with an overshoot and the icon hops.
+- **Sheets:** spring up.
+- **Toasts:** pop in.
 
-## Accessibility
-- **Contrast:**
-  - Ink on every sky stop is 9.9:1 or more.
-  - Secondary text on the sky uses `--ink-sky-2` (5:1 or more on every stop), because the usual `--ink-2` drops to 3.5:1 on frost and heat.
-  - Cobalt on white is 7.4:1.
-- **Targets:** at least 44px everywhere; the dock buttons are 52px.
-- **Gestures:** every gesture has a button and a key. Pieces are buttons with `aria-pressed` and a spoken name and slot.
-- **Reduced motion:** animations and transitions collapse to 1ms and the welcome sky stops drifting.
-- **Dark mode:** garments get a faint light rim and a soft light pool behind them, so black clothes stay visible on a night surface.
+## Layout of Today
+1. Place pill.
+2. Hero: temperatures plus a clay glyph.
+3. Verdict.
+4. Look deck.
+5. Hour capsules: icon, feels-like temperature, and a bar on the hours the coat is on.
+6. Why it works.
+7. Dock: ✕, **Wear this**, ♥.
+8. Floating clay tab bar.

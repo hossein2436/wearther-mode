@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useStore, trialDay, todayIso } from '../state/store';
-import { scenarioForecast } from '../data/mock';
-import { missingSlots, pickLooks, signature, summarize, thermalOffset, RAIN_THRESHOLD } from '../engine';
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { useStore, trialDay } from '../state/store';
+import { useDay } from '../state/day';
+import { missingSlots, pickLooks, signature } from '../engine';
 import type { WindowSummary } from '../types';
-import { SkyBackground } from '../components/Sky';
+import { Scene, confettiFrom } from '../components/Scene';
 import { LookDeck } from '../components/Look';
 import { Icon } from '../components/Icon';
+import { WeatherGlyph, glyphForHour, glyphForMood } from '../components/WeatherGlyph';
 import { degFor, isStandalone, timeOf } from './format';
 import { PaywallSheet, InstallSheet } from './Sheets';
 
@@ -15,8 +16,29 @@ const installHidden = () => { try { return localStorage.getItem(INSTALL_KEY) ===
 const press = (key: 'ArrowLeft' | 'ArrowRight') =>
   document.querySelector<HTMLElement>('.deck')?.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
 
+/** Count up to a number once, quickly, the first time it appears. */
+function useCountUp(target: number, ms = 750): number {
+  const [v, setV] = useState(target);
+  const first = useRef(true);
+  useEffect(() => {
+    if (!first.current || matchMedia('(prefers-reduced-motion: reduce)').matches) { setV(target); return; }
+    first.current = false;
+    const from = target - 12, t0 = performance.now();
+    let raf = 0;
+    const step = (t: number) => {
+      const k = Math.min(1, (t - t0) / ms);
+      setV(Math.round(from + (target - from) * (1 - (1 - k) ** 3)));
+      if (k < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target, ms]);
+  return v;
+}
+
 export function Today() {
   const { s, d } = useStore();
+  const { tomorrow, dayIso, forecast, summary, stale, mood, now } = useDay();
   const [kept, setKept] = useState<string[]>([]);
   const [index, setIndex] = useState(0);
   const [round, setRound] = useState(0);
@@ -26,27 +48,9 @@ export function Today() {
   const [install, setInstall] = useState(false);
   const [hideInstall, setHideInstall] = useState(installHidden);
   const deg = degFor(s.units);
+  const lo = useCountUp(summary?.minFeels ?? 0);
+  const hi = useCountUp(summary?.maxFeels ?? 0);
 
-  // After you're home, we dress you for tomorrow.
-  const now = new Date();
-  const tomorrow = now.getHours() >= s.win.back;
-  const dayIso = tomorrow ? todayIso(new Date(now.getTime() + 86_400_000)) : s.isoToday;
-
-  const demoFetched = useMemo(() => {
-    const t = new Date();
-    if (s.offline) t.setHours(7, 12, 0, 0);
-    return t.toISOString();
-  }, [s.offline]);
-  const forecast = useMemo(() => {
-    if (s.demo) return { ...scenarioForecast(s.scenario, demoFetched), place: s.place || 'London' };
-    const day = s.forecast?.days.find((x) => x.date === dayIso);
-    return s.forecast && day ? { place: s.forecast.place, fetchedAt: s.forecast.fetchedAt, hours: day.hours } : null;
-  }, [s.demo, s.scenario, demoFetched, s.place, s.forecast, dayIso]);
-  const stale = s.offline || !!s.forecast?.stale;
-  const summary = useMemo(
-    () => (forecast ? summarize(forecast, s.win, thermalOffset(s.thermal, s.learnedOffset)) : null),
-    [forecast, s.win, s.thermal, s.learnedOffset],
-  );
   const recent = s.worn.filter((w) => w.date !== s.isoToday).map((w) => [...w.ids].sort().join('+'));
   const looks = useMemo(
     () => (summary
@@ -62,7 +66,6 @@ export function Today() {
 
   const wornToday = s.worn.find((w) => w.date === s.isoToday);
   const wornSig = wornToday ? [...wornToday.ids].sort().join('+') : undefined;
-  // If you've already chosen today, open on that look.
   useEffect(() => {
     if (!wornSig) return;
     const i = looks.findIndex((o) => signature(o.items) === wornSig);
@@ -71,8 +74,7 @@ export function Today() {
 
   const day = trialDay(s);
   const expired = !s.subscribed && day !== null && day >= 8;
-  const avail = s.closet.filter((i) => i.status === 'available');
-  const missing = missingSlots(avail);
+  const missing = missingSlots(s.closet.filter((i) => i.status === 'available'));
   const look = looks[index];
   const lookSig = look ? signature(look.items) : '';
   const isWorn = !!look && lookSig === wornSig;
@@ -83,30 +85,34 @@ export function Today() {
     if (!look) return;
     d({ type: 'feedback', signal: sg, ids: look.items.map((i) => i.id), features: look.features, quiet: sg !== 'love' });
   };
-  const wear = () => {
+  const wear = (e: MouseEvent<HTMLButtonElement>) => {
     if (!look) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const css = getComputedStyle(e.currentTarget.closest('.app') ?? document.body);
+    confettiFrom(r.left + r.width / 2, r.top, [css.getPropertyValue('--m1'), css.getPropertyValue('--m2'), '#ff3d7f', '#ffffff', '#15161a', ...look.items.map((i) => i.color)]);
     d({ type: 'wear', ids: look.items.map((i) => i.id) });
     signal('wear');
     setJustWorn(true);
-    window.setTimeout(() => setJustWorn(false), 1600);
+    window.setTimeout(() => setJustWorn(false), 1700);
   };
 
   return (
     <main className={`screen has-tabs today${showDeck ? ' has-dock' : ''}`}>
-      <SkyBackground s={summary} />
+      <Scene mood={mood} />
 
       {!summary || !forecast ? (
         <section className="empty-state" aria-live="polite">
+          <WeatherGlyph kind="partly" />
           {!s.coords && !s.place ? (
             <>
               <h1 className="t-display">Where are you today?</h1>
-              <p className="t-body muted">We need your city to read the sky.</p>
+              <p className="t-body">We need your city to read the sky.</p>
               <button className="btn primary" onClick={() => d({ type: 'go', route: 'settings' })}>Set my city</button>
             </>
           ) : s.offline ? (
             <>
               <h1 className="t-display">You’re offline</h1>
-              <p className="t-body muted">Connect once to get the forecast for {s.place || 'your area'}.</p>
+              <p className="t-body">Connect once to get the forecast for {s.place || 'your area'}.</p>
             </>
           ) : (
             <p className="working"><span className="spinner" aria-hidden="true" /> Reading the sky over {s.place || 'your area'}…</p>
@@ -114,43 +120,40 @@ export function Today() {
         </section>
       ) : (
         <header aria-labelledby="verdict">
-          <div className="day-head">
-            <div className="day-place">
-              <strong>{forecast.place}</strong>
-              <span>{longDay(dayIso)}</span>
+          <span className="place-pill"><Icon name="pin" size={16} duo /> {forecast.place} <span>{tomorrow ? 'tomorrow' : shortDay(dayIso)}</span></span>
+          <div className="hero">
+            <div>
+              <p className="hero-temp" aria-label={`Feels like ${deg(summary.minFeels)} to ${deg(summary.maxFeels)}`}>
+                <span className="t-hero" aria-hidden="true">{deg(lo)}</span>
+                {summary.maxFeels !== summary.minFeels && <><span className="sep" aria-hidden="true">/</span><span className="t-hero" aria-hidden="true">{deg(hi)}</span></>}
+              </p>
+              <p className="hero-feels">Feels like, {hh(s.win.leave)} to {hh(s.win.back)}{stale ? `. Offline: from ${timeOf(forecast.fetchedAt)}` : ''}</p>
             </div>
-            {tomorrow && <span className="day-tag">Tomorrow</span>}
+            <WeatherGlyph kind={glyphForMood(mood)} />
           </div>
-          <p className="day-temp" aria-label={`Feels like ${deg(summary.minFeels)} to ${deg(summary.maxFeels)}`}>
-            <span className="t-hero">{deg(summary.minFeels)}</span>
-            {summary.maxFeels !== summary.minFeels && <><span className="to">to</span><span className="t-hero">{deg(summary.maxFeels)}</span></>}
-          </p>
-          <p className="day-feels">
-            Feels like, {hh(s.win.leave)} to {hh(s.win.back)}{stale ? `. Offline: forecast from ${timeOf(forecast.fetchedAt)}` : ''}
-          </p>
-          <h1 id="verdict" className="day-verdict" style={{ marginTop: 'var(--s3)' }}>{verdict(summary, s.win)}</h1>
+          <h1 id="verdict" className="verdict">{verdict(summary, s.win)}</h1>
         </header>
       )}
 
       {s.checkInFor && s.checkInFor < s.isoToday && (
-        <section className="card glass" aria-labelledby="checkin-title">
+        <section className="card" aria-labelledby="checkin-title">
           <h2 id="checkin-title" className="t-title">How was yesterday’s outfit?</h2>
           <div className="feel-row">
-            <button className="btn secondary" onClick={() => d({ type: 'checkIn', feel: 'cold' })}>Too cold</button>
-            <button className="btn secondary" onClick={() => d({ type: 'checkIn', feel: 'right' })}>Just right</button>
-            <button className="btn secondary" onClick={() => d({ type: 'checkIn', feel: 'warm' })}>Too warm</button>
+            <button className="btn secondary" onClick={() => d({ type: 'checkIn', feel: 'cold' })}>🥶 Cold</button>
+            <button className="btn secondary" onClick={() => d({ type: 'checkIn', feel: 'right' })}>👌 Right</button>
+            <button className="btn secondary" onClick={() => d({ type: 'checkIn', feel: 'warm' })}>🥵 Warm</button>
           </div>
         </section>
       )}
 
       {expired ? (
-        <section className="card glass">
+        <section className="card">
           <h2 className="t-title">Your free week is over</h2>
           <p className="t-small muted">Your closet is safe. Pick a plan to keep getting a look every morning.</p>
           <button className="btn primary" onClick={() => setPaywall(true)}>See plans</button>
         </section>
       ) : summary && missing.length ? (
-        <section className="card glass">
+        <section className="card">
           <h2 className="t-title">{s.closet.length ? `Add ${missing[0]} to get today’s look` : 'Your closet is empty'}</h2>
           <p className="t-small muted">
             {s.closet.length && s.closet.every((i) => i.status !== 'available')
@@ -160,42 +163,38 @@ export function Today() {
           <button className="btn primary" onClick={() => d({ type: 'go', route: 'add' })}>Add clothes</button>
         </section>
       ) : summary && !looks.length ? (
-        <section className="card glass">
+        <section className="card">
           <h2 className="t-title">Nothing in your closet suits this weather</h2>
           <p className="t-small muted">Check what’s in the wash, or add a layer for {deg(summary.minFeels)}.</p>
         </section>
       ) : summary ? (
         <>
-          <section className="stage" aria-label="Your looks for the day">
-            <Rail s={summary} layer={look?.layerHours ?? null} nowHour={tomorrow ? null : now.getHours()} />
+          <section aria-label="Your looks for the day">
             <LookDeck
               looks={looks}
               index={index}
               kept={kept}
-              onToggle={(id) => { setKept((k) => (k.includes(id) ? k.filter((x) => x !== id) : [...k, id])); setIndex(0); }}
+              onToggle={(id) => { navigator.vibrate?.(8); setKept((k) => (k.includes(id) ? k.filter((x) => x !== id) : [...k, id])); setIndex(0); }}
               onSkip={() => { signal('skip'); setIndex((i) => i + 1); }}
-              onLove={() => signal('love')}
+              onLove={() => { navigator.vibrate?.([10, 30, 10]); signal('love'); }}
               onRestart={() => { setKept([]); setIndex(0); setRound((r) => r + 1); }}
               wornSig={wornSig}
               justWorn={justWorn}
               lovedSigs={s.loved}
             />
           </section>
-
-          {look && <PlanLine s={summary} look={look.items} layer={look.layerHours} />}
+          <Hours s={summary} layer={look?.layerHours ?? null} nowHour={tomorrow ? null : now.getHours()} deg={deg} outer={look?.items.find((i) => i.slot === 'outer')?.name} />
           {look && <p className="why-weather">{look.style.length > 1 ? `${look.style[1]}. ` : ''}{look.why}</p>}
           {look?.notes.map((n) => <p key={n} className="note">{n}</p>)}
 
           {look && (
             <div className="actions-dock">
-              <button className="round" aria-label="Another look" onClick={() => press('ArrowLeft')}>
-                <Icon name="x" size={26} />
-              </button>
+              <button className="round" aria-label="Another look" onClick={() => press('ArrowLeft')}><Icon name="x" size={28} /></button>
               <button className={`btn primary${isWorn ? ' is-done' : ''}`} disabled={isWorn} onClick={wear}>
                 {isWorn ? <><Icon name="check" /> Wearing this</> : 'Wear this'}
               </button>
-              <button className={`round${isLoved ? ' is-on' : ''}`} aria-label="Love this look" aria-pressed={isLoved} onClick={() => press('ArrowRight')}>
-                <Icon name="heart" size={24} fill={isLoved} />
+              <button className={`round love${isLoved ? ' is-on' : ''}`} aria-label="Love this look" aria-pressed={isLoved} onClick={() => press('ArrowRight')}>
+                <Icon name="heart" size={26} fill />
               </button>
             </div>
           )}
@@ -204,14 +203,14 @@ export function Today() {
 
       {day !== null && day >= 5 && day <= 7 && !s.subscribed && (
         <div className="banner" role="note">
-          <span>{8 - day} {8 - day === 1 ? 'day' : 'days'} left of your free week</span>
+          <span>✨ {8 - day} {8 - day === 1 ? 'day' : 'days'} left of your free week</span>
           <button className="btn" onClick={() => setPlans(true)}>See plans</button>
         </div>
       )}
 
       {!isStandalone() && !hideInstall && !expired && summary && (
-        <section className="card glass">
-          <p className="t-small">Add Wearther Mode to your Home Screen so your closet stays safe and your look can reach you each morning.</p>
+        <section className="card">
+          <p className="t-small">Put Wearther Mode on your Home Screen so your closet stays safe and your look reaches you each morning.</p>
           <div className="row">
             <button className="btn secondary" onClick={() => setInstall(true)}>Show me how</button>
             <button className="btn quiet" onClick={() => { setHideInstall(true); try { localStorage.setItem(INSTALL_KEY, '1'); } catch { /* private mode */ } }}>Not now</button>
@@ -226,62 +225,41 @@ export function Today() {
   );
 }
 
-/** The hours you're out, top to bottom, beside the deck: rain marked in cobalt, the coat in ink. */
-function Rail({ s, layer, nowHour }: { s: WindowSummary; layer: [number, number] | null; nowHour: number | null }) {
-  const hours = s.hours;
-  const n = hours.length;
-  if (n < 2) return <div className="rail" aria-hidden="true" />;
-  const first = hours[0].hour, range = hours[n - 1].hour - first;
-  const pos = (h: number) => `calc(8px + (100% - 16px) * ${(h - first) / range})`;
-  const span = (a: number, b: number) => ({ top: pos(a), height: `calc((100% - 16px) * ${(b - a) / range})` });
-  const wet: [number, number][] = [];
-  for (const h of hours) {
-    if (h.precipProb < RAIN_THRESHOLD) continue;
-    const last = wet[wet.length - 1];
-    if (last && last[1] === h.hour - 1) last[1] = h.hour;
-    else wet.push([h.hour, h.hour]);
-  }
-  const ticks = hours.filter((h, i) => i === n - 1 || (i % 2 === 0 && hours[n - 1].hour - h.hour >= 2));
+/** One glass capsule per hour you're out: an icon, the feels-like temperature, a bar when the coat is on. */
+function Hours({ s, layer, nowHour, deg, outer }: { s: WindowSummary; layer: [number, number] | null; nowHour: number | null; deg: (c: number) => string; outer?: string }) {
   return (
-    <div className="rail" aria-hidden="true">
-      <span className="rail-line" />
-      {ticks.map((h) => <span key={h.hour} className="rail-tick" style={{ top: pos(h.hour) }}>{String(h.hour).padStart(2, '0')}</span>)}
-      {wet.map(([a, b]) => <span key={a} className="rail-rain" style={span(a, Math.max(b, a + 0.6))} />)}
-      {layer && <span className="rail-layer" style={span(layer[0], Math.max(layer[1], layer[0] + 0.6))} />}
-      {nowHour !== null && nowHour >= first && nowHour <= hours[n - 1].hour && <span className="rail-now" style={{ top: pos(nowHour) }} />}
-    </div>
+    <>
+      <div className="hours" role="list" aria-label="Hour by hour">
+        {s.hours.map((h, i) => {
+          const on = !!layer && h.hour >= layer[0] && h.hour <= layer[1];
+          return (
+            <div
+              key={h.hour}
+              role="listitem"
+              className={`hour${h.hour === nowHour ? ' is-now' : ''}${on ? ' is-layer' : ''}`}
+              style={{ ['--i' as string]: i }}
+              aria-label={`${hh(h.hour)}, feels ${deg(h.feelsC)}${h.precipProb >= 50 ? ', rain likely' : ''}${on && outer ? `, ${outer} on` : ''}`}
+            >
+              <small>{h.hour === nowHour ? 'Now' : String(h.hour).padStart(2, '0')}</small>
+              <WeatherGlyph kind={glyphForHour(h)} className="mini" />
+              <strong>{deg(h.feelsC)}</strong>
+            </div>
+          );
+        })}
+      </div>
+      {outer && layer && <p className="hours-key"><span><i />{outer} on</span></p>}
+    </>
   );
 }
 
-/** The rail's legend, written as the day's plan. */
-function PlanLine({ s, look, layer }: { s: WindowSummary; look: { slot: string; name: string }[]; layer: [number, number] | null }) {
-  const outer = look.find((i) => i.slot === 'outer');
-  const first = s.hours[0].hour, last = s.hours[s.hours.length - 1].hour;
-  const items: { key: string; cls: string; text: string }[] = [];
-  if (outer && layer) {
-    const all = layer[0] === first && layer[1] === last;
-    items.push({ key: 'layer', cls: '', text: all ? `${outer.name} on all day` : `${outer.name} on ${hh(layer[0])}–${hh(layer[1] + 1)}` });
-  }
-  if (s.rainFrom !== null) {
-    items.push({ key: 'rain', cls: 'rain', text: s.rainTo !== null && s.rainTo < last ? `Rain ${hh(s.rainFrom)}–${hh(s.rainTo + 1)}` : `Rain from ${hh(s.rainFrom)}` });
-  }
-  if (!items.length) return null;
-  return (
-    <div className="plan-line">
-      {items.map((x) => <span key={x.key} className="plan-item"><i className={`plan-key ${x.cls}`} aria-hidden="true" />{x.text}</span>)}
-    </div>
-  );
-}
-
-/** One plain sentence about the day, like a forecaster would say it. */
 function verdict(s: WindowSummary, win: { leave: number; back: number }): string {
   const mean = (s.minFeels + s.maxFeels) / 2;
   const feel = mean < 4 ? 'Cold' : mean < 14 ? 'Cool' : mean < 20 ? 'Mild' : mean < 26 ? 'Warm' : 'Hot';
   const wind = s.maxWind >= 25 ? ' and windy' : '';
-  const rain = s.rainFrom === null ? `Dry until ${hh(win.back)}.` : s.rainFrom <= win.leave ? 'Rain from the start.' : `Rain from ${hh(s.rainFrom)}.`;
-  return `${feel}${wind}. ${rain}`;
+  const rain = s.rainFrom === null ? `dry till ${hh(win.back)}` : s.rainFrom <= win.leave ? 'rain from the start' : `rain from ${hh(s.rainFrom)}`;
+  return `${feel}${wind}, ${rain}.`;
 }
 
-function longDay(iso: string): string {
-  return new Date(`${iso}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+function shortDay(iso: string): string {
+  return new Date(`${iso}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' });
 }

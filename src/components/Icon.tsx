@@ -17,6 +17,14 @@ const P: Record<string, string> = {
   share: 'M12 4v11M8 8l4-4 4 4M6 12v8h12v-8',
   plusbox: 'M5 5h14v14H5zM12 9v6M9 12h6',
   sun: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
+  sunny: 'M12 7.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9zM12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4',
+  plusbox2: 'M7 3.5h10A3.5 3.5 0 0 1 20.5 7v10a3.5 3.5 0 0 1-3.5 3.5H7A3.5 3.5 0 0 1 3.5 17V7A3.5 3.5 0 0 1 7 3.5zM12 8v8M8 12h8',
+  sliders: 'M4 7h9M17 7h3M4 17h3M11 17h9M15 4.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM9 14.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5z',
+  sparkle: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z',
+  bell: 'M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0',
+  user: 'M12 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8zM4.5 20a7.5 7.5 0 0 1 15 0',
+  crown: 'M4 18h16M4.5 8l4 4 3.5-6 3.5 6 4-4-1.5 10h-12z',
+  trash: 'M5 7h14M9 7V4.5h6V7M7 7l1 13h8l1-13',
   heart: 'M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z',
   x: 'M7 7l10 10M17 7L7 17',
   pin: 'M12 21s-6-5.6-6-11a6 6 0 0 1 12 0c0 5.4-6 11-6 11zM12 8.5a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 0 0 0-3.2z',
@@ -28,7 +36,7 @@ const P: Record<string, string> = {
   wifi: 'M3 3l18 18M8.5 16.5a5 5 0 0 1 7 0M5 12.6a10 10 0 0 1 4-2.3M12 10a10 10 0 0 1 7 2.6M12 20h.01',
 };
 
-export function Icon({ name, size = 22, label, fill }: { name: keyof typeof P | string; size?: number; label?: string; fill?: boolean }) {
+export function Icon({ name, size = 22, label, fill, duo }: { name: keyof typeof P | string; size?: number; label?: string; fill?: boolean; duo?: boolean }) {
   return (
     <svg
       width={size}
@@ -36,13 +44,14 @@ export function Icon({ name, size = 22, label, fill }: { name: keyof typeof P | 
       viewBox="0 0 24 24"
       fill={fill ? 'currentColor' : 'none'}
       stroke="currentColor"
-      strokeWidth={1.75}
+      strokeWidth={2.1}
       strokeLinecap="round"
       strokeLinejoin="round"
       role={label ? 'img' : undefined}
       aria-label={label}
       aria-hidden={label ? undefined : true}
     >
+      {duo && <path d={P[name] ?? ''} fill="currentColor" fillOpacity={0.28} stroke="none" />}
       <path d={P[name] ?? ''} />
     </svg>
   );

@@ -4,6 +4,7 @@ import { ItemVisual } from './Garment';
 import { Icon } from './Icon';
 import { SLOT_LABEL } from '../data/catalog';
 import { signature } from '../engine';
+import { WeatherGlyph } from './WeatherGlyph';
 
 interface Box { l: number; t: number; w: number; h: number; rot: number; z: number }
 
@@ -94,6 +95,7 @@ export function LookDeck({
   const drag = useRef<{ x: number; active: boolean } | null>(null);
   const swallowClick = useRef(false);
   const card = useRef<HTMLDivElement>(null);
+  const [tilt, setTilt] = useState<{ rx: number; ry: number; gx: number; gy: number } | null>(null);
 
   const top = looks[index];
   const next = looks[index + 1];
@@ -107,9 +109,17 @@ export function LookDeck({
 
   const down = (e: PointerEvent<HTMLDivElement>) => { drag.current = { x: e.clientX, active: false }; };
   const move = (e: PointerEvent<HTMLDivElement>) => {
-    if (!drag.current) return;
+    if (!drag.current) {
+      // Not dragging: tilt the card toward the pointer, and move the glare with it.
+      if (e.pointerType !== 'mouse') return;
+      const r = e.currentTarget.getBoundingClientRect();
+      const px = (e.clientX - r.left) / r.width, py = (e.clientY - r.top) / r.height;
+      setTilt({ rx: (0.5 - py) * 10, ry: (px - 0.5) * 12, gx: px * 100, gy: py * 100 });
+      return;
+    }
     const d = e.clientX - drag.current.x;
     if (!drag.current.active && Math.abs(d) > 10) {
+      setTilt(null);
       drag.current.active = true;
       setDragging(true);
       e.currentTarget.setPointerCapture(e.pointerId);
@@ -136,6 +146,7 @@ export function LookDeck({
     return (
       <div className="deck">
         <div className="look-end">
+          <WeatherGlyph kind="partly" />
           <p className="t-title">That’s every look for this weather.</p>
           <p className="t-small muted">Unkeep a piece to see more, or start again.</p>
           <button className="btn secondary" onClick={onRestart}>Start again</button>
@@ -162,19 +173,24 @@ export function LookDeck({
         ref={card}
         key={sig}
         className={`look is-top${dragging ? ' is-dragging' : ''}${fly ? ` fly-${fly}` : ''}`}
-        style={dx ? { transform: `translateX(${dx}px) rotate(${dx / 18}deg)` } : undefined}
+        style={{
+          ...(dx ? { transform: `translateX(${dx}px) rotate(${dx / 16}deg)` } : tilt ? { transform: `rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg)` } : {}),
+          ['--gx' as string]: `${tilt?.gx ?? 30}%`, ['--gy' as string]: `${tilt?.gy ?? 0}%`, ['--go' as string]: tilt ? 0.9 : 0.55,
+        }}
+        onPointerLeave={() => setTilt(null)}
         onPointerDown={down}
         onPointerMove={move}
         onPointerUp={up}
         onPointerCancel={up}
         onClickCapture={(e) => { if (swallowClick.current) { e.stopPropagation(); e.preventDefault(); swallowClick.current = false; } }}
       >
-        <span className="look-count" aria-hidden="true">{index + 1} of {looks.length}{loved ? '  ♥' : ''}</span>
+        <span className="look-count" aria-hidden="true">{looks.map((_, i) => <i key={i} className={i === index ? 'on' : ''} />)}</span>
+        <span className="visually-hidden">Look {index + 1} of {looks.length}{loved ? ', loved' : ''}</span>
         {kept.length > 0 && !worn && <span className="look-kept">{kept.length} kept</span>}
         <Composition items={top.items} kept={kept} onToggle={worn ? undefined : onToggle} />
         {top.style.length > 0 && (
           <div className="look-why" aria-label="Why it works">
-            <span className="why-pill">{top.style[0]}</span>
+            <span className="why-pill"><Icon name="sparkle" size={14} fill />{top.style[0]}</span>
           </div>
         )}
         {worn && (
@@ -183,7 +199,8 @@ export function LookDeck({
             <small>Have a good one</small>
           </div>
         )}
-        {burst > 0 && <div key={burst} className="heart-burst" aria-hidden="true"><Icon name="heart" size={96} fill /></div>}
+        <span className="glare" aria-hidden="true" />
+        {burst > 0 && <div key={burst} className="heart-burst" aria-hidden="true"><Icon name="heart" size={120} fill /></div>}
       </div>
     </div>
   );

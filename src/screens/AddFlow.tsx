@@ -98,14 +98,14 @@ export function AddFlow({ compact }: { compact?: boolean }) {
         <div className={compact ? 'stack' : 'capture'}>
           {!compact && (
             <div className="capture-art" aria-hidden="true">
-              <Garment kind="knit" color="#7A8B6F" />
-              <Garment kind="tshirt" color="#F4F4F2" />
-              <Garment kind="jeans" color="#3E5A7E" />
+              <span className="float"><Garment kind="knit" color="#7A8B6F" /></span>
+              <span className="float"><Garment kind="tshirt" color="#F4F4F2" /></span>
+              <span className="float"><Garment kind="jeans" color="#3E5A7E" /></span>
             </div>
           )}
           <div className="stack">
             <button className="btn primary block" onClick={() => cam.current?.click()}>
-              <Icon name="camera" /> Take a photo
+              <Icon name="camera" duo /> Take a photo
             </button>
             <button className="btn secondary block" onClick={() => lib.current?.click()}>
               <Icon name="photos" /> Choose from your photos
@@ -113,9 +113,9 @@ export function AddFlow({ compact }: { compact?: boolean }) {
           </div>
           {!compact && (
             <ul className="tips" aria-label="For the best cut-out">
-              <li><Icon name="flat" /> One piece, laid flat or hung</li>
-              <li><Icon name="light" /> Daylight, no flash</li>
-              <li><Icon name="hanger" /> Plain background</li>
+              <li><span><Icon name="flat" duo /></span>One piece, flat or hung</li>
+              <li><span><Icon name="light" duo /></span>Daylight, no flash</li>
+              <li><span><Icon name="hanger" duo /></span>Plain background</li>
             </ul>
           )}
           {(s.demo || protoMode()) && <button className="btn quiet" onClick={addSamples}>Try it with sample clothes</button>}

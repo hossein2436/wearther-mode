@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Sheet } from '../components/ui';
 import { Icon } from '../components/Icon';
+import { WeatherGlyph } from '../components/WeatherGlyph';
 import { useStore, trialDay } from '../state/store';
 import { api, ApiError, tz } from '../api';
 
@@ -39,6 +40,10 @@ export function PaywallSheet({ onClose }: { onClose?: () => void }) {
   const upcoming = steps.find((y) => y.d >= day);
   return (
     <Sheet title={over ? 'Your free week is over' : 'How your free week works'} onClose={onClose}>
+      <div className="pay-hero">
+        <WeatherGlyph kind="sun" />
+        <p className="t-title">Every morning, a look that suits the sky.</p>
+      </div>
       <ol className="timeline">
         {steps.map((x) => (
           <li key={x.d} className={day > x.d ? 'is-past' : x === upcoming ? 'is-now' : ''}>
