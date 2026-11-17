@@ -5,7 +5,8 @@ import { missingSlots, pick, signature, summarize, thermalOffset } from '../engi
 import { DayRibbon, tempColor, hh } from '../components/DayRibbon';
 import { FlatLay } from '../components/FlatLay';
 import { Icon } from '../components/Icon';
-import { degFor, isStandalone, longDate, timeOf } from './format';
+import { degFor, isStandalone, timeOf } from './format';
+import type { WindowSummary } from '../types';
 import { PaywallSheet, InstallSheet } from './Sheets';
 
 export function Today() {
@@ -16,7 +17,8 @@ export function Today() {
   const [paywall, setPaywall] = useState(true); // auto-opens once the trial has ended
   const [plans, setPlans] = useState(false);
   const [install, setInstall] = useState(false);
-  const [hideInstall, setHideInstall] = useState(false);
+  const [hideInstall, setHideInstall] = useState(installHidden);
+  const [celebrate, setCelebrate] = useState(false);
   const deg = degFor(s.units);
 
   // Which day are we dressing for? After you're back home, it's tomorrow.
@@ -71,8 +73,20 @@ export function Today() {
     setShowB(false);
   };
 
+  const wear = () => {
+    if (!outfit) return;
+    d({ type: 'wear', ids: outfit.items.map((i) => i.id) });
+    setCelebrate(true);
+    window.setTimeout(() => setCelebrate(false), 1600);
+  };
+  const dismissInstall = () => {
+    setHideInstall(true);
+    try { localStorage.setItem(INSTALL_KEY, '1'); } catch { /* private mode: dismiss for this visit only */ }
+  };
+  const showActions = !expired && !missing.length && !!summary && !!outfit;
+
   return (
-    <main className="screen has-tabs today">
+    <main className={`screen has-tabs today${showActions ? ' has-actionbar' : ''}`}>
       {!summary || !forecast ? (
         <section className="sky" style={{ ['--tint' as string]: tempColor(12) }} aria-live="polite">
           {!s.coords && !s.place ? (
@@ -91,21 +105,19 @@ export function Today() {
           )}
         </section>
       ) : (
-      <section className="sky" style={{ ['--tint' as string]: tempColor(mean) }} aria-labelledby="today-temp">
-        <p className="t-small sky-date">{tomorrow ? 'Tomorrow, ' : ''}{longDate(dayIso)} in {forecast.place}</p>
-        <h1 id="today-temp" className="t-display">
-          {deg(summary.minFeels)} to {deg(summary.maxFeels)}
-        </h1>
-        <p className="t-small sky-sub">
-          Feels like, {hh(s.win.leave)} to {hh(s.win.back)}
-          {summary.rainFrom !== null ? `. Rain from ${hh(summary.rainFrom)}` : '. Dry'}
-          {summary.maxWind >= 25 ? `, windy (${Math.round(summary.maxWind)} km/h)` : ''}
-        </p>
+      <section className="sky" style={{ ['--tint' as string]: tempColor(mean) }} aria-labelledby="today-line">
+        <div className="sky-head">
+          <div className="sky-text">
+            <p className="t-small sky-date">{tomorrow ? 'Tomorrow · ' : ''}{shortDate(dayIso)} · {forecast.place}</p>
+            <h1 id="today-line" className="sky-line">{skyLine(summary, s.win)}</h1>
+          </div>
+          <p className="sky-temp" aria-label={`Feels like ${deg(summary.minFeels)} to ${deg(summary.maxFeels)}`}>
+            <span>{deg(summary.minFeels)}</span><span className="sky-temp-sep" aria-hidden="true">to</span><span>{deg(summary.maxFeels)}</span>
+            <span className="sky-temp-label">feels like</span>
+          </p>
+        </div>
         <DayRibbon s={summary} layer={outfit?.layerHours ?? null} layerName={outerName} deg={deg} stale={stale} />
-        <p className="t-micro attribution">
-          {stale ? `Offline. Using the forecast from ${timeOf(fetchedAt)}. ` : ''}
-          {s.forecast?.attribution ?? 'Weather data: MET Norway, CC BY 4.0'}
-        </p>
+        {stale && <p className="t-micro stale-note">Offline. Using the forecast from {timeOf(fetchedAt)}.</p>}
       </section>
       )}
 
@@ -149,46 +161,54 @@ export function Today() {
       ) : !summary ? null : outfit ? (
         <section className="outfit" aria-labelledby="outfit-title">
           <div className="outfit-head">
-            <h2 id="outfit-title" className="t-heading">{showB ? 'Plan B' : tomorrow ? 'Tomorrow’s outfit' : 'Today’s outfit'}</h2>
-            {locked.length > 0 && <span className="t-small muted">{locked.length} kept</span>}
+            <h2 id="outfit-title" className="visually-hidden">{showB ? 'Plan B' : tomorrow ? 'Tomorrow’s outfit' : 'Today’s outfit'}</h2>
+            <div className="seg" role="group" aria-label="Which outfit">
+              <button aria-pressed={!showB} onClick={() => setShowB(false)}>{tomorrow ? 'Tomorrow' : 'Today'}</button>
+              <button aria-pressed={showB} disabled={!picks.planB} onClick={() => setShowB(true)}>Plan B</button>
+            </div>
+            <p className="t-small muted" aria-live="polite">
+              {locked.length ? `${locked.length} kept` : 'Tap a piece to keep it'}
+            </p>
           </div>
-          <FlatLay
-            items={outfit.items}
-            locked={locked}
-            revealKey={signature(outfit.items)}
-            onToggleLock={(id) => setLocked((l) => (l.includes(id) ? l.filter((x) => x !== id) : [...l, id]))}
-          />
+          <div className="flatlay-wrap">
+            <FlatLay
+              items={outfit.items}
+              locked={locked}
+              worn={celebrate}
+              revealKey={signature(outfit.items)}
+              onToggleLock={(id) => setLocked((l) => (l.includes(id) ? l.filter((x) => x !== id) : [...l, id]))}
+            />
+            {celebrate && (
+              <div className="worn-stamp" role="status">
+                <span className="worn-check"><Icon name="check" size={28} /></span>
+                Logged. Have a good day.
+              </div>
+            )}
+          </div>
           <p className="why">{outfit.why}</p>
           {outfit.notes.map((n) => <p key={n} className="note">{n}</p>)}
-
-          <button
-            className="btn primary wear"
-            disabled={isWorn}
-            onClick={() => d({ type: 'wear', ids: outfit.items.map((i) => i.id) })}
-          >
-            {isWorn ? <><Icon name="check" /> Wearing this today</> : 'Wear this'}
-          </button>
-          <div className="outfit-actions">
-            {picks.planB && (
-              <button className="btn secondary" onClick={() => setShowB(!showB)}>
-                {showB ? 'Back to first pick' : 'Plan B'}
-              </button>
-            )}
-            <button className="btn secondary" onClick={reshuffle} aria-label={locked.length ? 'Reshuffle, keeping locked pieces' : 'Reshuffle'}>
-              <Icon name="shuffle" /> Reshuffle
-            </button>
-            <button className="icon-btn outline" aria-label="I like this outfit" onClick={() => d({ type: 'rate', ids: outfit.items.map((i) => i.id), delta: 1 })}>
+          <div className="rate-row">
+            <span className="t-small muted">Good pick?</span>
+            <button className="icon-btn" aria-label="I like this outfit" onClick={() => { d({ type: 'rate', ids: outfit.items.map((i) => i.id), delta: 1 }); d({ type: 'toast', text: 'Noted. More like this.' }); }}>
               <Icon name="up" />
             </button>
             <button
-              className="icon-btn outline"
+              className="icon-btn"
               aria-label="Not for me, show something else"
               onClick={() => { d({ type: 'rate', ids: outfit.items.map((i) => i.id), delta: -1 }); reshuffle(); }}
             >
               <Icon name="down" />
             </button>
           </div>
-          <p className="t-small muted center">Tap the lock on a piece to keep it when you reshuffle.</p>
+
+          <div className="action-bar">
+            <button className="btn secondary shuffle" onClick={reshuffle} aria-label={locked.length ? 'Reshuffle, keeping kept pieces' : 'Reshuffle'}>
+              <Icon name="shuffle" /> Shuffle
+            </button>
+            <button className={`btn primary wear${isWorn ? ' is-done' : ''}`} disabled={isWorn} onClick={wear}>
+              {isWorn ? <><Icon name="check" /> Wearing this today</> : 'Wear this'}
+            </button>
+          </div>
         </section>
       ) : (
         <section className="outfit empty">
@@ -199,15 +219,36 @@ export function Today() {
 
       {!isStandalone() && !hideInstall && !expired && (
         <section className="card install-hint">
-          <p className="t-body">Put Wearther Mode on your Home Screen so your closet stays safe and outfits can reach you each morning.</p>
+          <p className="t-small">Add Wearther Mode to your Home Screen so your closet stays safe and outfits can reach you each morning.</p>
           <div className="checkin-row">
             <button className="btn secondary" onClick={() => setInstall(true)}>Show me how</button>
-            <button className="btn ghost" onClick={() => setHideInstall(true)}>Later</button>
+            <button className="btn ghost" onClick={dismissInstall}>Not now</button>
           </div>
         </section>
+      )}
+      {summary && forecast && (
+        <p className="t-micro attribution">{s.forecast?.attribution ?? 'Weather data: MET Norway, CC BY 4.0'}</p>
       )}
       {install && <InstallSheet onClose={() => setInstall(false)} />}
       {plans && !s.subscribed && <PaywallSheet onClose={() => setPlans(false)} />}
     </main>
   );
+}
+
+const INSTALL_KEY = 'wm-hide-install';
+const installHidden = () => { try { return localStorage.getItem(INSTALL_KEY) === '1'; } catch { return false; } };
+
+/** One plain sentence about the day, like a forecaster would say it. */
+function skyLine(s: WindowSummary, win: { leave: number; back: number }): string {
+  const mean = (s.minFeels + s.maxFeels) / 2;
+  const feel = mean < 4 ? 'Cold' : mean < 14 ? 'Cool' : mean < 20 ? 'Mild' : mean < 26 ? 'Warm' : 'Hot';
+  const wind = s.maxWind >= 25 ? ' and windy' : '';
+  const rain = s.rainFrom === null
+    ? `dry until ${hh(win.back)}`
+    : s.rainFrom <= win.leave ? 'rain from the start' : `rain from ${hh(s.rainFrom)}`;
+  return `${feel}${wind}, ${rain}.`;
+}
+
+function shortDate(iso: string): string {
+  return new Date(`${iso}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
 }

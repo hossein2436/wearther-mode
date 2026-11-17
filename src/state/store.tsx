@@ -125,7 +125,7 @@ function reducer(s: State, a: Action): State {
         const status = i.slot !== 'outer' && i.slot !== 'shoes' && sinceWash % s.autoWashAfter === 0 ? 'wash' : i.status;
         return { ...i, wearCount, lastWorn: date, status } as Item;
       });
-      return { ...s, closet, worn: [...s.worn.filter((w) => w.date !== date), { date, ids: a.ids }], checkInFor: date, toast: 'Logged for today' };
+      return { ...s, closet, worn: [...s.worn.filter((w) => w.date !== date), { date, ids: a.ids }], checkInFor: date }; // the Today stamp confirms it; no toast
     }
     case 'rate': {
       const pw = { ...s.pairWeights };

@@ -39,13 +39,19 @@ export function Welcome() {
 const HOURS = Array.from({ length: 19 }, (_, i) => i + 5);
 const hh = (h: number) => `${String(h).padStart(2, '0')}:00`;
 
+/** Step 1 of 3: the hours you're out and how you feel the cold, on one screen. */
 export function OnbDay() {
   const { s, d } = useStore();
+  const opts = [
+    { v: 'cold', t: 'I feel the cold' },
+    { v: 'neutral', t: 'About average' },
+    { v: 'warm', t: 'I run warm' },
+  ] as const;
   return (
     <main className="screen">
-      <Progress step={1} of={4} />
-      <h1 className="t-title">When are you out?</h1>
-      <p className="t-body muted">We dress you for these hours, not just the morning.</p>
+      <Progress step={1} of={3} />
+      <h1 className="t-title">Your day</h1>
+      <p className="t-body muted">We dress you for the hours you’re outside, not just the morning.</p>
       <div className="field-row">
         <label className="field">
           <span>I leave at</span>
@@ -60,40 +66,26 @@ export function OnbDay() {
           </select>
         </label>
       </div>
-      <div className="stack-actions">
-        <button className="btn primary" onClick={() => d({ type: 'go', route: 'onb-thermal' })}>Continue</button>
-        <button className="btn ghost" onClick={() => d({ type: 'go', route: 'onb-thermal' })}>Skip, use 08:00 to 18:00</button>
-      </div>
-    </main>
-  );
-}
-
-export function OnbThermal() {
-  const { s, d } = useStore();
-  const opts = [
-    { v: 'cold', t: 'I feel the cold', sub: 'Usually the one wearing a jumper' },
-    { v: 'neutral', t: 'About average', sub: '' },
-    { v: 'warm', t: 'I run warm', sub: 'T-shirt while others wear coats' },
-  ] as const;
-  return (
-    <main className="screen">
-      <Progress step={2} of={4} />
-      <h1 className="t-title">How do you feel the cold?</h1>
-      <p className="t-body muted">We’ll fine-tune this from your morning check-ins.</p>
-      <div className="choice-list" role="radiogroup" aria-label="How you feel the cold">
-        {opts.map((o) => (
-          <button key={o.v} role="radio" aria-checked={s.thermal === o.v} className="choice" onClick={() => d({ type: 'patch', patch: { thermal: o.v } })}>
-            <span className="choice-title">{o.t}</span>
-            {o.sub && <span className="choice-sub">{o.sub}</span>}
-          </button>
-        ))}
-      </div>
+      <fieldset className="tag-group">
+        <legend>How do you feel the cold?</legend>
+        <div className="seg seg-wide" role="radiogroup" aria-label="How you feel the cold">
+          {opts.map((o) => (
+            <button key={o.v} role="radio" aria-checked={s.thermal === o.v} aria-pressed={s.thermal === o.v} onClick={() => d({ type: 'patch', patch: { thermal: o.v } })}>
+              {o.t}
+            </button>
+          ))}
+        </div>
+        <p className="t-small muted">We fine-tune this from your morning check-ins.</p>
+      </fieldset>
       <div className="stack-actions">
         <button className="btn primary" onClick={() => d({ type: 'go', route: 'onb-place' })}>Continue</button>
       </div>
     </main>
   );
 }
+
+/** Kept for old links: the thermal question now lives on the first step. */
+export const OnbThermal = OnbDay;
 
 export function OnbPlace() {
   const { s, d } = useStore();
@@ -135,7 +127,7 @@ export function OnbPlace() {
 
   return (
     <main className="screen">
-      <Progress step={3} of={4} />
+      <Progress step={2} of={3} />
       <h1 className="t-title">Where are you?</h1>
       <p className="t-body muted">
         We use your location to get the forecast. Only a rough area, about the size of a town, is sent to our server.
@@ -164,7 +156,7 @@ export function Starter() {
   const done = s.closet.length;
   return (
     <main className="screen">
-      <Progress step={4} of={4} />
+      <Progress step={3} of={3} />
       <h1 className="t-title">Add the clothes you wear most</h1>
       <p className="t-body muted">
         Fifteen pieces is plenty to start. You do this once, and you can add new things whenever you buy them.

@@ -76,6 +76,12 @@ export function DayRibbon({
           <span key={h.hour} style={{ left: `${pct(h.hour) + 50 / n}%` }}>{String(h.hour).padStart(2, '0')}</span>
         ))}
       </div>
+      {/* Legend: the ribbon encodes three things, so name them (recognition over recall). */}
+      <figcaption className="ribbon-key" aria-hidden="true">
+        <span><i className="key-temp" />Feels like</span>
+        {s.rainFrom !== null && <span><i className="key-rain" />Rain</span>}
+        {layer && layerName && <span><i className="key-layer" />Layer on</span>}
+      </figcaption>
     </figure>
   );
 }
