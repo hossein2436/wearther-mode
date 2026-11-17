@@ -1,5 +1,6 @@
 # Build from the repo root:  docker build -f server/Dockerfile .
-FROM node:22-slim AS build
+ARG BASE_REGISTRY=docker.io/library
+FROM ${BASE_REGISTRY}/node:22-slim AS build
 ARG NPM_REGISTRY=https://registry.npmjs.org/
 WORKDIR /app
 COPY server/package.json server/package-lock.json server/
@@ -8,7 +9,7 @@ COPY src/ src/
 COPY server/ server/
 RUN cd server && npx vitest run && npm run build && npm prune --omit=dev
 
-FROM node:22-slim
+FROM ${BASE_REGISTRY}/node:22-slim
 WORKDIR /app
 ENV NODE_ENV=production DATA_DIR=/data NODE_OPTIONS=--disable-warning=ExperimentalWarning
 COPY --from=build /app/server/node_modules node_modules

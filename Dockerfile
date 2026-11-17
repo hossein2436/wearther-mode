@@ -1,5 +1,6 @@
 # ---- Build the PWA ----
-FROM node:22-slim AS build
+ARG BASE_REGISTRY=docker.io/library
+FROM ${BASE_REGISTRY}/node:22-slim AS build
 WORKDIR /app
 # Override with a closer npm mirror if registry.npmjs.org is slow from your server
 ARG NPM_REGISTRY=https://registry.npmjs.org/
@@ -9,6 +10,6 @@ COPY . .
 RUN npx vitest run && npm run build
 
 # ---- Serve it with Caddy (automatic HTTPS) ----
-FROM caddy:2-alpine
+FROM ${BASE_REGISTRY}/caddy:2-alpine
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /app/dist /srv

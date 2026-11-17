@@ -1,4 +1,5 @@
-FROM python:3.12-slim
+ARG BASE_REGISTRY=docker.io/library
+FROM ${BASE_REGISTRY}/python:3.12-slim
 ARG PIP_INDEX_URL=https://pypi.org/simple
 ENV PIP_INDEX_URL=$PIP_INDEX_URL PIP_NO_CACHE_DIR=1 PYTHONUNBUFFERED=1 U2NET_HOME=/models
 WORKDIR /app
