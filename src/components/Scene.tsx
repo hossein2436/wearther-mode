@@ -13,49 +13,75 @@ export function Scene({ mood }: { mood: Mood }) {
     const ctx = c?.getContext('2d');
     if (!c || !ctx) return;
     const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const dpr = Math.min(2, devicePixelRatio || 1);
+    const dpr = Math.min(1.5, devicePixelRatio || 1);
     let w = 0, h = 0, raf = 0, last = performance.now();
     const resize = () => { w = c.clientWidth; h = c.clientHeight; c.width = w * dpr; c.height = h * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); };
     resize();
 
     const kind = mood === 'rain' ? 'rain' : mood === 'frost' ? 'snow' : 'motes';
-    const n = kind === 'rain' ? 90 : kind === 'snow' ? 60 : 26;
+    const n = kind === 'rain' ? 66 : kind === 'snow' ? 54 : 22;
     const rand = (a: number, b: number) => a + Math.random() * (b - a);
     const ps = Array.from({ length: n }, () => ({
       x: rand(0, w), y: rand(0, h), z: rand(0.4, 1),
       r: kind === 'motes' ? rand(10, 46) : rand(1, 3.2), p: rand(0, Math.PI * 2),
     }));
 
+    // One soft light sprite, drawn once, stamped many times (radial gradients per particle per frame are slow).
+    const sprite = document.createElement('canvas');
+    sprite.width = sprite.height = 64;
+    const sg = sprite.getContext('2d')!;
+    const grad = sg.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(255,255,255,0.18)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    sg.fillStyle = grad;
+    sg.fillRect(0, 0, 64, 64);
+    const minFrame = 1 / 30; // 30 fps is plenty for weather and halves the cost
+    let acc = 0;
+
+    // Particles are drawn in three depth layers, each with ONE path and ONE stroke/fill call per frame.
+    const layers = [0, 1, 2].map((k) => ps.filter((_, i) => i % 3 === k));
+    const depth = [0.45, 0.7, 1];
     const draw = (dt: number) => {
       ctx.clearRect(0, 0, w, h);
-      for (const q of ps) {
+      layers.forEach((L, k) => {
+        const z = depth[k];
         if (kind === 'rain') {
-          q.y += 900 * q.z * dt; q.x -= 220 * q.z * dt;
-          if (q.y > h + 20) { q.y = -20; q.x = rand(0, w + 120); }
-          ctx.strokeStyle = `rgba(255,255,255,${0.18 + 0.32 * q.z})`;
-          ctx.lineWidth = 1.2 * q.z + 0.4;
+          ctx.strokeStyle = `rgba(255,255,255,${0.16 + 0.34 * z})`;
+          ctx.lineWidth = 1.2 * z + 0.4;
           ctx.lineCap = 'round';
-          ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(q.x + 6 * q.z, q.y - 22 * q.z); ctx.stroke();
+          ctx.beginPath();
+          for (const q of L) {
+            q.y += 900 * z * dt; q.x -= 220 * z * dt;
+            if (q.y > h + 20) { q.y = -20; q.x = rand(0, w + 120); }
+            ctx.moveTo(q.x, q.y); ctx.lineTo(q.x + 6 * z, q.y - 22 * z);
+          }
+          ctx.stroke();
         } else if (kind === 'snow') {
-          q.p += dt; q.y += 34 * q.z * dt; q.x += Math.sin(q.p) * 18 * dt;
-          if (q.y > h + 10) { q.y = -10; q.x = rand(0, w); }
-          ctx.fillStyle = `rgba(255,255,255,${0.45 + 0.5 * q.z})`;
-          ctx.beginPath(); ctx.arc(q.x, q.y, q.r * q.z + 0.6, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = `rgba(255,255,255,${0.45 + 0.5 * z})`;
+          ctx.beginPath();
+          for (const q of L) {
+            q.p += dt; q.y += 34 * z * dt; q.x += Math.sin(q.p) * 18 * dt;
+            if (q.y > h + 10) { q.y = -10; q.x = rand(0, w); }
+            const r = q.r * z + 0.6;
+            ctx.moveTo(q.x + r, q.y); ctx.arc(q.x, q.y, r, 0, Math.PI * 2);
+          }
+          ctx.fill();
         } else {
-          q.p += dt * 0.5; q.y -= 10 * q.z * dt; q.x += Math.sin(q.p) * 6 * dt;
-          if (q.y < -60) { q.y = h + 60; q.x = rand(0, w); }
-          const g = ctx.createRadialGradient(q.x, q.y, 0, q.x, q.y, q.r);
-          g.addColorStop(0, `rgba(255,255,255,${0.16 * q.z})`);
-          g.addColorStop(1, 'rgba(255,255,255,0)');
-          ctx.fillStyle = g;
-          ctx.beginPath(); ctx.arc(q.x, q.y, q.r, 0, Math.PI * 2); ctx.fill();
+          ctx.globalAlpha = z;
+          for (const q of L) {
+            q.p += dt * 0.5; q.y -= 10 * z * dt; q.x += Math.sin(q.p) * 6 * dt;
+            if (q.y < -60) { q.y = h + 60; q.x = rand(0, w); }
+            ctx.drawImage(sprite, q.x - q.r, q.y - q.r, q.r * 2, q.r * 2);
+          }
+          ctx.globalAlpha = 1;
         }
-      }
+      });
     };
     const loop = (t: number) => {
       const dt = Math.min(0.05, (t - last) / 1000);
       last = t;
-      draw(dt);
+      acc += dt;
+      if (acc >= minFrame) { draw(acc); acc = 0; }
       raf = requestAnimationFrame(loop);
     };
     if (still) draw(0);

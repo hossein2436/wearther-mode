@@ -36,6 +36,10 @@ function useCountUp(target: number, ms = 750): number {
   return v;
 }
 
+function CountUp({ value, fmt, className }: { value: number; fmt: (n: number) => string; className: string }) {
+  return <span className={className} aria-hidden="true">{fmt(useCountUp(value))}</span>;
+}
+
 export function Today() {
   const { s, d } = useStore();
   const { tomorrow, dayIso, forecast, summary, stale, mood, now } = useDay();
@@ -48,8 +52,6 @@ export function Today() {
   const [install, setInstall] = useState(false);
   const [hideInstall, setHideInstall] = useState(installHidden);
   const deg = degFor(s.units);
-  const lo = useCountUp(summary?.minFeels ?? 0);
-  const hi = useCountUp(summary?.maxFeels ?? 0);
 
   const recent = s.worn.filter((w) => w.date !== s.isoToday).map((w) => [...w.ids].sort().join('+'));
   const looks = useMemo(
@@ -124,8 +126,8 @@ export function Today() {
           <div className="hero">
             <div>
               <p className="hero-temp" aria-label={`Feels like ${deg(summary.minFeels)} to ${deg(summary.maxFeels)}`}>
-                <span className="t-hero" aria-hidden="true">{deg(lo)}</span>
-                {summary.maxFeels !== summary.minFeels && <><span className="sep" aria-hidden="true">/</span><span className="t-hero" aria-hidden="true">{deg(hi)}</span></>}
+                <CountUp className="t-hero" value={summary.minFeels} fmt={deg} />
+                {summary.maxFeels !== summary.minFeels && <><span className="sep" aria-hidden="true">/</span><CountUp className="t-hero" value={summary.maxFeels} fmt={deg} /></>}
               </p>
               <p className="hero-feels">Feels like, {hh(s.win.leave)} to {hh(s.win.back)}{stale ? `. Offline: from ${timeOf(forecast.fetchedAt)}` : ''}</p>
             </div>
@@ -241,7 +243,7 @@ function Hours({ s, layer, nowHour, deg, outer }: { s: WindowSummary; layer: [nu
               aria-label={`${hh(h.hour)}, feels ${deg(h.feelsC)}${h.precipProb >= 50 ? ', rain likely' : ''}${on && outer ? `, ${outer} on` : ''}`}
             >
               <small>{h.hour === nowHour ? 'Now' : String(h.hour).padStart(2, '0')}</small>
-              <WeatherGlyph kind={glyphForHour(h)} className="mini" />
+              <WeatherGlyph kind={glyphForHour(h)} className="mini" still />
               <strong>{deg(h.feelsC)}</strong>
             </div>
           );

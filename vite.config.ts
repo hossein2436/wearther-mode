@@ -11,7 +11,7 @@ export default defineConfig({
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.ts',
-      injectManifest: { globPatterns: ['**/*.{js,css,html,svg,png,woff2}'] },
+      injectManifest: { globPatterns: ['**/*.{js,css,html,svg,png}', 'assets/*-latin-standard-*.woff2'] },
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Wearther Mode',

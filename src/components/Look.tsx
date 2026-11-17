@@ -95,7 +95,6 @@ export function LookDeck({
   const drag = useRef<{ x: number; active: boolean } | null>(null);
   const swallowClick = useRef(false);
   const card = useRef<HTMLDivElement>(null);
-  const [tilt, setTilt] = useState<{ rx: number; ry: number; gx: number; gy: number } | null>(null);
 
   const top = looks[index];
   const next = looks[index + 1];
@@ -112,14 +111,18 @@ export function LookDeck({
     if (!drag.current) {
       // Not dragging: tilt the card toward the pointer, and move the glare with it.
       if (e.pointerType !== 'mouse') return;
-      const r = e.currentTarget.getBoundingClientRect();
+      const el = e.currentTarget, r = el.getBoundingClientRect();
       const px = (e.clientX - r.left) / r.width, py = (e.clientY - r.top) / r.height;
-      setTilt({ rx: (0.5 - py) * 10, ry: (px - 0.5) * 12, gx: px * 100, gy: py * 100 });
+      el.style.setProperty('--rx', `${(0.5 - py) * 10}deg`);
+      el.style.setProperty('--ry', `${(px - 0.5) * 12}deg`);
+      el.style.setProperty('--gx', `${px * 100}%`);
+      el.style.setProperty('--gy', `${py * 100}%`);
+      el.style.setProperty('--go', '0.9');
       return;
     }
     const d = e.clientX - drag.current.x;
     if (!drag.current.active && Math.abs(d) > 10) {
-      setTilt(null);
+      for (const k of ['--rx', '--ry']) e.currentTarget.style.removeProperty(k);
       drag.current.active = true;
       setDragging(true);
       e.currentTarget.setPointerCapture(e.pointerId);
@@ -146,7 +149,7 @@ export function LookDeck({
     return (
       <div className="deck">
         <div className="look-end">
-          <WeatherGlyph kind="partly" />
+          <WeatherGlyph kind="partly" still />
           <p className="t-title">That’s every look for this weather.</p>
           <p className="t-small muted">Unkeep a piece to see more, or start again.</p>
           <button className="btn secondary" onClick={onRestart}>Start again</button>
@@ -173,11 +176,8 @@ export function LookDeck({
         ref={card}
         key={sig}
         className={`look is-top${dragging ? ' is-dragging' : ''}${fly ? ` fly-${fly}` : ''}`}
-        style={{
-          ...(dx ? { transform: `translateX(${dx}px) rotate(${dx / 16}deg)` } : tilt ? { transform: `rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg)` } : {}),
-          ['--gx' as string]: `${tilt?.gx ?? 30}%`, ['--gy' as string]: `${tilt?.gy ?? 0}%`, ['--go' as string]: tilt ? 0.9 : 0.55,
-        }}
-        onPointerLeave={() => setTilt(null)}
+        style={dx ? { transform: `translateX(${dx}px) rotate(${dx / 16}deg)` } : undefined}
+        onPointerLeave={(e) => { for (const k of ['--rx', '--ry', '--gx', '--gy', '--go']) e.currentTarget.style.removeProperty(k); }}
         onPointerDown={down}
         onPointerMove={move}
         onPointerUp={up}

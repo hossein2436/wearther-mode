@@ -73,14 +73,16 @@ function daysBetween(a: string, b: string): number {
   return Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
 }
 
-/** Returns null when the candidate breaks a hard rule. Lower penalty = better. */
-function penalty(items: Item[], ctx: EngineContext, hasOuterAvailable: boolean): number | null {
+/**
+ * Weather fit of everything except shoes: hard rules, hour-by-hour warmth, legs, rain cover.
+ * Pure arithmetic, so it can be run over every upper-body combination cheaply. Null = breaks a hard rule.
+ */
+function weatherPart(items: Item[], ctx: EngineContext, hasOuterAvailable: boolean): number | null {
   const s = ctx.summary;
   const rainy = s.maxRainProb >= RAIN_THRESHOLD;
   const outer = items.find((i) => i.slot === 'outer');
   const mid = items.find((i) => i.slot === 'mid');
   const bottom = items.find((i) => i.slot === 'bottom');
-  const shoes = items.find((i) => i.slot === 'shoes');
 
   // Hard rules: weather is a rule, not a hint.
   if (s.maxFeels >= HOT && ((mid && mid.warmth >= 2) || (outer && outer.warmth >= 3))) return null;
@@ -105,18 +107,28 @@ function penalty(items: Item[], ctx: EngineContext, hasOuterAvailable: boolean):
   if (without > needWarm + 1) p += (without - needWarm - 1) * 6; // not too hot once the layer is off
   if (outer && needCold - without < 0.75 && !(rainy && outer.waterproof)) p += 8; // a jacket you'd only carry
 
-  // Legs and feet
   if (bottom) {
     if ((bottom.kind === 'shorts' || bottom.kind === 'skirt') && s.minFeels < 14) p += (14 - s.minFeels) * 1.5;
     if (bottom.kind !== 'shorts' && bottom.kind !== 'skirt' && s.maxFeels >= 27) p += (s.maxFeels - 26) * 1.5;
   }
+  if (rainy && outer?.waterproof) p -= 6;
+  return p;
+}
+
+/** Returns null when the candidate breaks a hard rule. Lower penalty = better. */
+function penalty(items: Item[], ctx: EngineContext, hasOuterAvailable: boolean): number | null {
+  const base = weatherPart(items, ctx, hasOuterAvailable);
+  if (base === null) return null;
+  const s = ctx.summary;
+  const rainy = s.maxRainProb >= RAIN_THRESHOLD;
+  const shoes = items.find((i) => i.slot === 'shoes');
+  let p = base;
   if (shoes) {
     if (shoes.kind === 'sandals' && (s.minFeels < 18 || rainy)) p += 20;
     if (shoes.kind === 'boots' && s.maxFeels >= 25) p += 10;
     if (rainy && (shoes.waterproof || shoes.kind === 'boots')) p -= 3;
     if (s.minFeels < 3 && shoes.kind !== 'boots') p += 4;
   }
-  if (rainy && outer?.waterproof) p -= 6;
 
   // Formality coherence
   const f = items.map((i) => i.formality);
@@ -155,30 +167,78 @@ function hash(str: string): number {
   return (h >>> 0) / 4294967295;
 }
 
-/** Every valid outfit, best first. */
-export function rankOutfits(ctx: EngineContext): { items: Item[]; penalty: number }[] {
+/** How many upper-body combinations survive the cheap weather pass into full style scoring. */
+const BEAM = 240;
+const PER_BASE = 10;
+
+/**
+ * Valid outfits, best first. Two stages so it stays fast with a big closet:
+ *  1. every top+bottom (or dress) × warm layer × coat is scored on weather alone (cheap arithmetic);
+ *  2. the best BEAM of those (at most PER_BASE per top+bottom, for variety) get shoes and the full score.
+ * Pieces in `must` are required (kept pieces), so they're never pruned away.
+ */
+export function rankOutfits(ctx: EngineContext, must: string[] = []): { items: Item[]; penalty: number }[] {
   const pool = ctx.closet.filter(isAvail);
   const by = (slot: Item['slot']) => pool.filter((i) => i.slot === slot);
   const tops = by('top'), bottoms = by('bottom'), ones = by('onepiece'), shoes = by('shoes');
   const mids: (Item | null)[] = [null, ...by('mid')];
   const outers: (Item | null)[] = [null, ...by('outer')];
   const hasOuter = outers.length > 1;
+  const shoeIds = new Set(shoes.map((x) => x.id));
+  const mustBody = must.filter((id) => !shoeIds.has(id));
+  const mustShoes = must.filter((id) => shoeIds.has(id));
 
   const bases: Item[][] = [];
   for (const t of tops) for (const b of bottoms) bases.push([t, b]);
   for (const o of ones) bases.push([o]);
 
-  const out: { items: Item[]; penalty: number }[] = [];
-  for (const base of bases)
-    for (const m of mids)
-      for (const o of outers)
-        for (const s of shoes) {
-          const items = [...base, ...(m ? [m] : []), ...(o ? [o] : []), s];
-          const p = penalty(items, ctx, hasOuter);
-          if (p === null) continue;
-          // Deterministic tie-breaker that changes day to day.
-          out.push({ items, penalty: p + hash(ctx.today + signature(items)) * 2 });
+  // Stage 1: weather only. Weather fit depends on warmth/rain/leg-length classes, not on which exact
+  // piece it is, so score each class combination once, then expand the best classes into real pieces.
+  const keepOut = (it: Item | null) => (it?.keepOutOfRain ? 1 : 0);
+  const baseKey = (b: Item[]) => b.map((i) => `${i.slot}:${i.warmth}:${i.kind === 'shorts' || i.kind === 'skirt' ? 's' : 'l'}:${keepOut(i)}`).join('|');
+  const midKey = (m: Item | null) => (m ? `${m.warmth}:${keepOut(m)}` : '-');
+  const outerKey = (o: Item | null) => (o ? `${o.warmth}:${o.waterproof ? 1 : 0}:${keepOut(o)}` : '-');
+  const group = <T,>(xs: T[], key: (x: T) => string) => {
+    const g = new Map<string, T[]>();
+    for (const x of xs) { const k = key(x); const l = g.get(k); if (l) l.push(x); else g.set(k, [x]); }
+    return [...g.values()];
+  };
+  const baseGroups = group(bases, baseKey), midGroups = group(mids, midKey), outerGroups = group(outers, outerKey);
+  const classes: { bs: Item[][]; ms: (Item | null)[]; os: (Item | null)[]; w: number }[] = [];
+  for (const bs of baseGroups)
+    for (const ms of midGroups)
+      for (const os of outerGroups) {
+        const rep = [...bs[0], ...(ms[0] ? [ms[0]] : []), ...(os[0] ? [os[0]] : [])];
+        const w = weatherPart(rep, ctx, hasOuter);
+        if (w !== null) classes.push({ bs, ms, os, w });
+      }
+  classes.sort((a, b) => a.w - b.w);
+  const kept: { items: Item[]; w: number }[] = [];
+  const perBase = new Map<Item[], number>();
+  outer: for (const c of classes)
+    for (const b of c.bs) {
+      for (const m of c.ms)
+        for (const o of c.os) {
+          if (kept.length >= BEAM) break outer;
+          if ((perBase.get(b) ?? 0) >= PER_BASE) continue;
+          const items = [...b, ...(m ? [m] : []), ...(o ? [o] : [])];
+          if (!mustBody.every((id) => items.some((i) => i.id === id))) continue;
+          perBase.set(b, (perBase.get(b) ?? 0) + 1);
+          kept.push({ items, w: c.w });
         }
+    }
+
+  // Stage 2: shoes and the full score (style, rules, taste, recency)
+  const out: { items: Item[]; penalty: number }[] = [];
+  for (const u of kept)
+    for (const sh of shoes) {
+      if (mustShoes.length && !mustShoes.includes(sh.id)) continue;
+      const items = [...u.items, sh];
+      const p = penalty(items, ctx, hasOuter);
+      if (p === null) continue;
+      // Deterministic tie-breaker that changes day to day.
+      out.push({ items, penalty: p + hash(ctx.today + signature(items)) * 2 });
+    }
   return out.sort((a, b) => a.penalty - b.penalty);
 }
 
@@ -276,11 +336,7 @@ export interface Picks {
 
 /** Hero outfit plus Plan B (shares at most one piece with the hero). */
 export function pick(ctx: EngineContext, opts: { exclude?: string[]; locked?: string[] } = {}): Picks {
-  const ranked = rankOutfits(ctx).filter(
-    (c) =>
-      !(opts.exclude ?? []).includes(signature(c.items)) &&
-      (opts.locked ?? []).every((id) => c.items.some((i) => i.id === id)),
-  );
+  const ranked = rankOutfits(ctx, opts.locked ?? []).filter((c) => !(opts.exclude ?? []).includes(signature(c.items)));
   if (!ranked.length) return { hero: null, planB: null };
   const hero = ranked[0];
   const heroIds = new Set(hero.items.map((i) => i.id));
@@ -294,9 +350,7 @@ export function pick(ctx: EngineContext, opts: { exclude?: string[]; locked?: st
  */
 export function pickLooks(ctx: EngineContext, opts: { exclude?: string[]; locked?: string[]; n?: number } = {}): Outfit[] {
   const locked = opts.locked ?? [];
-  const ranked = rankOutfits(ctx).filter(
-    (c) => !(opts.exclude ?? []).includes(signature(c.items)) && locked.every((id) => c.items.some((i) => i.id === id)),
-  );
+  const ranked = rankOutfits(ctx, locked).filter((c) => !(opts.exclude ?? []).includes(signature(c.items)));
   const chosen: typeof ranked = [];
   const allow = 2 + locked.length;
   for (const c of ranked) {

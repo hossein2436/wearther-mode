@@ -103,7 +103,7 @@ export function ThermalCards() {
     <div className="feel-cards" role="radiogroup" aria-label="How you feel the cold">
       {FEEL.map((o) => (
         <button key={o.v} role="radio" aria-checked={s.thermal === o.v} className="feel-card" onClick={() => d({ type: 'patch', patch: { thermal: o.v } })}>
-          <WeatherGlyph kind={o.glyph} />
+          <WeatherGlyph kind={o.glyph} still />
           <span><strong>{o.t}</strong><span>{o.sub}</span></span>
         </button>
       ))}
