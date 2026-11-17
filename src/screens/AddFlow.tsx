@@ -4,22 +4,38 @@ import type { Item } from '../types';
 import { Header } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { ItemVisual } from '../components/Garment';
-import { TagEditor } from './TagEditor';
+import { TagEditor, autoName } from './TagEditor';
 import { dominantColor, nameColor } from '../engine/color';
 import { KINDS } from '../data/catalog';
 import { sampleCloset } from '../data/mock';
+import { api, blobToDataUrl } from '../api';
+import { protoMode } from './format';
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-/** Downscale to ≤ 800 px and re-encode, so photos stay small enough to keep on the device. */
-async function shrink(file: File): Promise<string> {
-  const bmp = await createImageBitmap(file);
-  const scale = Math.min(1, 800 / Math.max(bmp.width, bmp.height));
+/** Downscale an image and re-encode it. WebP keeps the cut-out's transparency. */
+async function resize(src: Blob, max: number, type: 'image/webp' | 'image/jpeg', quality: number): Promise<Blob> {
+  const bmp = await createImageBitmap(src);
+  const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
   const c = document.createElement('canvas');
   c.width = Math.round(bmp.width * scale);
   c.height = Math.round(bmp.height * scale);
   c.getContext('2d')?.drawImage(bmp, 0, 0, c.width, c.height);
-  return c.toDataURL('image/webp', 0.82);
+  return new Promise((resolve, reject) => c.toBlob((b) => (b ? resolve(b) : reject(new Error('encode'))), type, quality));
+}
+
+/** Photo → server cut-out → small WebP kept on the phone. Falls back to the plain photo. */
+async function prepare(file: File, demo: boolean): Promise<{ photo: string; cut: boolean }> {
+  const upload = await resize(file, 1600, 'image/jpeg', 0.88);
+  if (!demo) {
+    try {
+      const png = await api.cutout(upload);
+      return { photo: await blobToDataUrl(await resize(png, 800, 'image/webp', 0.85)), cut: true };
+    } catch {
+      /* server unreachable or failed: keep the photo as it is */
+    }
+  }
+  return { photo: await blobToDataUrl(await resize(upload, 800, 'image/webp', 0.82)), cut: false };
 }
 
 export function AddScreen() {
@@ -45,12 +61,11 @@ export function AddFlow({ compact }: { compact?: boolean }) {
     d({ type: 'addDrafts', drafts });
     for (let k = 0; k < list.length; k++) {
       try {
-        const photo = await shrink(list[k]);
-        // Real app: upload to the server's cut-out worker; here we simulate its latency.
-        await new Promise((r) => setTimeout(r, 700));
+        const { photo, cut } = await prepare(list[k], s.demo);
+        if (!cut && !s.demo) d({ type: 'toast', text: 'We couldn’t cut this one out. It’ll look fine as it is.' });
         const color = await dominantColor(photo).catch(() => '#8A8F96');
         const item: Item = {
-          id: drafts[k].id, name: `${nameColor(color)} top`, kind: 'tshirt', slot: 'top', color, colorName: nameColor(color),
+          id: drafts[k].id, name: autoName(nameColor(color), null), kind: 'tshirt', slot: 'top', color, colorName: nameColor(color),
           warmth: KINDS.tshirt.warmth, formality: KINDS.tshirt.formality, status: 'available', wearCount: 0,
           photo, addedAt: s.isoToday,
         };
@@ -93,7 +108,7 @@ export function AddFlow({ compact }: { compact?: boolean }) {
           <p className="t-small muted tips">
             Best results: one piece per photo, laid flat or on a hanger, plain background, daylight.
           </p>
-          <button className="btn ghost" onClick={addSamples}>Try it with sample clothes</button>
+          {(s.demo || protoMode()) && <button className="btn ghost" onClick={addSamples}>Try it with sample clothes</button>}
         </>
       )}
 
@@ -111,6 +126,8 @@ export function AddFlow({ compact }: { compact?: boolean }) {
 function TagCard({ draft, left }: { draft: DraftItem; left: number }) {
   const { d } = useStore();
   const [item, setItem] = useState<Item>(draft.item!);
+  // Your own photo: you pick what it is (sample clothes arrive already tagged).
+  const [kindChosen, setKindChosen] = useState(!!draft.sample);
   const [dx, setDx] = useState(0);
   const start = useRef<number | null>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -118,6 +135,7 @@ function TagCard({ draft, left }: { draft: DraftItem; left: number }) {
   useEffect(() => ref.current?.focus(), []);
 
   const confirm = () => {
+    if (!kindChosen) return;
     d({ type: 'confirmDraft', id: draft.id, item });
     d({ type: 'toast', text: `${item.name} added` });
   };
@@ -136,7 +154,7 @@ function TagCard({ draft, left }: { draft: DraftItem; left: number }) {
         onPointerMove={(e) => start.current !== null && setDx(Math.max(0, e.clientX - start.current))}
         onPointerUp={() => {
           const w = ref.current?.offsetWidth ?? 300;
-          if (dx > w * 0.3) confirm();
+          if (dx > w * 0.3 && kindChosen) confirm();
           setDx(0);
           start.current = null;
         }}
@@ -144,10 +162,12 @@ function TagCard({ draft, left }: { draft: DraftItem; left: number }) {
         <ItemVisual item={item} />
         <span className="tagcard-count">{left} to check</span>
       </div>
-      <TagEditor item={item} onChange={setItem} suggested={!draft.sample} />
+      <TagEditor item={item} onChange={setItem} kindChosen={kindChosen} onKindChosen={() => setKindChosen(true)} />
       <div className="tagcard-actions">
         <button className="btn secondary" onClick={() => d({ type: 'discardDraft', id: draft.id })}>Skip this one</button>
-        <button className="btn primary" onClick={confirm}><Icon name="check" /> Looks right</button>
+        <button className="btn primary" onClick={confirm} disabled={!kindChosen}>
+          {kindChosen ? <><Icon name="check" /> Looks right</> : 'Choose what it is'}
+        </button>
       </div>
       <p className="t-small muted center">Or swipe the photo right to confirm.</p>
     </div>

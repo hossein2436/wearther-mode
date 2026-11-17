@@ -25,8 +25,21 @@ const DRESS = [
 const nearest = (opts: { v: number }[], x: number) =>
   opts.reduce((a, b) => (Math.abs(b.v - x) < Math.abs(a.v - x) ? b : a)).v;
 
-export function TagEditor({ item, onChange, suggested }: { item: Item; onChange: (i: Item) => void; suggested?: boolean }) {
+/** Default name from colour and kind, e.g. "Navy t-shirt". Kept in sync until the user types their own. */
+export const autoName = (colorName: string, kind: GarmentKind | null) =>
+  kind ? `${colorName} ${KINDS[kind].label.toLowerCase()}` : `${colorName} piece`;
+
+export function TagEditor({
+  item, onChange, suggested, kindChosen = true, onKindChosen,
+}: {
+  item: Item;
+  onChange: (i: Item) => void;
+  suggested?: boolean;
+  kindChosen?: boolean;
+  onKindChosen?: () => void;
+}) {
   const set = (p: Partial<Item>) => onChange({ ...item, ...p });
+  const isAuto = item.name === autoName(item.colorName, kindChosen ? item.kind : null);
   return (
     <div className="tags">
       <label className="field">
@@ -35,14 +48,20 @@ export function TagEditor({ item, onChange, suggested }: { item: Item; onChange:
       </label>
 
       <fieldset className="tag-group">
-        <legend>What is it?{suggested && <span className="suggested"> suggested</span>}</legend>
+        <legend>What is it?{suggested && kindChosen && <span className="suggested"> suggested</span>}</legend>
         {GROUPS.map((g) => (
           <div key={g.label} className="chip-row" role="group" aria-label={g.label}>
             {g.kinds.map((k) => (
               <Chip
                 key={k}
-                on={item.kind === k}
-                onClick={() => set({ kind: k, slot: KINDS[k].slot, warmth: KINDS[k].warmth, formality: KINDS[k].formality })}
+                on={kindChosen && item.kind === k}
+                onClick={() => {
+                  set({
+                    kind: k, slot: KINDS[k].slot, warmth: KINDS[k].warmth, formality: KINDS[k].formality,
+                    ...(isAuto ? { name: autoName(item.colorName, k) } : {}),
+                  });
+                  onKindChosen?.();
+                }}
               >
                 {KINDS[k].label}
               </Chip>
@@ -57,7 +76,10 @@ export function TagEditor({ item, onChange, suggested }: { item: Item; onChange:
           <input
             type="color"
             value={item.color}
-            onChange={(e) => set({ color: e.target.value, colorName: nameColor(e.target.value) })}
+            onChange={(e) => {
+              const colorName = nameColor(e.target.value);
+              set({ color: e.target.value, colorName, ...(isAuto ? { name: autoName(colorName, kindChosen ? item.kind : null) } : {}) });
+            }}
             aria-label="Main colour"
           />
           <span>{item.colorName}</span>

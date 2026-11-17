@@ -26,3 +26,7 @@ dist-ssr
 # Local env and build outputs
 .env
 dist-artifact
+
+# Local API data
+server/.data
+__pycache__/

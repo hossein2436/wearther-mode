@@ -5,9 +5,12 @@ import { Today } from './screens/Today';
 import { Closet, ItemDetail } from './screens/Closet';
 import { AddScreen } from './screens/AddFlow';
 import { Settings } from './screens/Settings';
+import { useForecast, useServerSync } from './state/sync';
 
 export default function App() {
   const { s } = useStore();
+  useServerSync();
+  useForecast();
   const main = ['today', 'closet', 'item', 'add', 'settings'].includes(s.route);
   const screen = (() => {
     switch (s.route) {

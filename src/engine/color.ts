@@ -70,11 +70,13 @@ export async function dominantColor(src: string): Promise<string> {
   ctx.drawImage(img, 0, 0, size, size);
   const { data } = ctx.getImageData(0, 0, size, size);
   const buckets = new Map<string, { n: number; r: number; g: number; b: number }>();
+  let whites = 0;
   for (let y = 8; y < size - 8; y++)
     for (let x = 8; x < size - 8; x++) {
       const i = (y * size + x) * 4;
       const [r, g, b, a] = [data[i], data[i + 1], data[i + 2], data[i + 3]];
-      if (a < 128 || (r > 235 && g > 235 && b > 235)) continue;
+      if (a < 128) continue;
+      if (r > 225 && g > 225 && b > 225) { whites++; continue; }
       const k = `${r >> 5},${g >> 5},${b >> 5}`;
       const e = buckets.get(k) ?? { n: 0, r: 0, g: 0, b: 0 };
       e.n++; e.r += r; e.g += g; e.b += b;
@@ -82,6 +84,7 @@ export async function dominantColor(src: string): Promise<string> {
     }
   let top: { n: number; r: number; g: number; b: number } | undefined;
   for (const e of buckets.values()) if (!top || e.n > top.n) top = e;
+  if (whites > (top?.n ?? 0)) return '#F4F4F2'; // a white garment on a transparent cut-out
   if (!top) return '#8A8F96';
   const hex = (v: number) => Math.round(v / top!.n).toString(16).padStart(2, '0');
   return `#${hex(top.r)}${hex(top.g)}${hex(top.b)}`;

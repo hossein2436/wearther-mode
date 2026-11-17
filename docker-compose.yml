@@ -8,14 +8,48 @@ services:
     container_name: wearther-web
     restart: unless-stopped
     env_file: .env
+    depends_on: [api]
     ports:
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"
       - "${HTTPS_PORT:-443}:443/udp"
     volumes:
-      - caddy_data:/data     # HTTPS certificates live here, keep this volume
+      - caddy_data:/data     # HTTPS certificates, keep this volume
       - caddy_config:/config
+
+  api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org/}
+    image: wearther-mode-api:latest
+    container_name: wearther-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+      CUTOUT_URL: http://cutout:8000/cutout
+      PUBLIC_URL: https://${SITE_ADDRESS}
+    depends_on: [cutout]
+    volumes:
+      - api_data:/data       # database, photos backup, keys: BACK THIS UP
+
+  cutout:
+    build:
+      context: ./cutout
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+    image: wearther-mode-cutout:latest
+    container_name: wearther-cutout
+    restart: unless-stopped
+    environment:
+      REMBG_MODEL: ${REMBG_MODEL:-u2net}
+    volumes:
+      - models:/models       # background-removal model, downloaded on first start
 
 volumes:
   caddy_data:
   caddy_config:
+  api_data:
+  models:

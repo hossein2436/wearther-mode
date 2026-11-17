@@ -4,6 +4,8 @@ import { Header, Chip, Sheet } from '../components/ui';
 import { ThermalChips } from './Onboarding';
 import { InstallSheet, NotifySheet, PaywallSheet } from './Sheets';
 import { SCENARIOS, type ScenarioId } from '../data/mock';
+import { api } from '../api';
+import { protoMode } from './format';
 
 const HOURS = Array.from({ length: 19 }, (_, i) => i + 5);
 const hh = (h: number) => `${String(h).padStart(2, '0')}:00`;
@@ -12,6 +14,31 @@ export function Settings() {
   const { s, d } = useStore();
   const [sheet, setSheet] = useState<null | 'install' | 'notify' | 'plans' | 'delete'>(null);
   const [typed, setTyped] = useState('');
+  const [city, setCity] = useState(s.place);
+  const [cityMsg, setCityMsg] = useState('');
+
+  const saveCity = async () => {
+    const q = city.trim();
+    if (!q) return;
+    setCityMsg('Looking it up…');
+    try {
+      const g = s.demo ? { name: q, lat: 0, lon: 0 } : await api.geocode(q);
+      d({ type: 'patch', patch: { place: g.name, coords: s.demo ? null : { lat: g.lat, lon: g.lon }, forecast: null } });
+      setCity(g.name);
+      setCityMsg(`Forecast set to ${g.name}.`);
+    } catch {
+      setCityMsg(`We couldn’t find “${q}”. Try the nearest big city.`);
+    }
+  };
+
+  const locateMe = () =>
+    navigator.geolocation?.getCurrentPosition(
+      (pos) => {
+        d({ type: 'patch', patch: { coords: { lat: Math.round(pos.coords.latitude * 100) / 100, lon: Math.round(pos.coords.longitude * 100) / 100 }, forecast: null } });
+        setCityMsg('Using your location.');
+      },
+      () => setCityMsg('Location is off. Type your city instead.'),
+    );
   const day = trialDay(s);
 
   const exportCloset = () => {
@@ -44,10 +71,17 @@ export function Settings() {
             </select>
           </label>
         </div>
-        <label className="field">
-          <span>City</span>
-          <input value={s.place} onChange={(e) => d({ type: 'patch', patch: { place: e.target.value } })} />
-        </label>
+        <form className="city-form" onSubmit={(e) => { e.preventDefault(); void saveCity(); }}>
+          <label className="field">
+            <span>City for the forecast</span>
+            <input value={city} onChange={(e) => setCity(e.target.value)} autoComplete="address-level2" />
+          </label>
+          <div className="row-actions">
+            <button className="btn secondary" type="submit">Save city</button>
+            <button className="btn ghost" type="button" onClick={locateMe}>Use my location</button>
+          </div>
+          {cityMsg && <p className="t-small muted" role="status">{cityMsg}</p>}
+        </form>
       </section>
 
       <section aria-labelledby="set-feel">
@@ -73,7 +107,11 @@ export function Settings() {
         <p className="t-body muted">{s.notifyAt ? `Sent every day at ${s.notifyAt}.` : 'Off.'}</p>
         <div className="row-actions">
           <button className="btn secondary" onClick={() => setSheet('notify')}>{s.notifyAt ? 'Change time' : 'Turn on'}</button>
-          {s.notifyAt && <button className="btn ghost" onClick={() => d({ type: 'patch', patch: { notifyAt: null } })}>Turn off</button>}
+          {s.notifyAt && (
+            <button className="btn ghost" onClick={() => { if (!s.demo) void api.pushUnsubscribe().catch(() => undefined); d({ type: 'patch', patch: { notifyAt: null } }); }}>
+              Turn off
+            </button>
+          )}
         </div>
         <button className="btn ghost" onClick={() => setSheet('install')}>Add to Home Screen</button>
       </section>
@@ -90,7 +128,12 @@ export function Settings() {
                 : `Free week: ${8 - day} ${8 - day === 1 ? 'day' : 'days'} left.`}
         </p>
         {!s.subscribed && <button className="btn secondary" onClick={() => setSheet('plans')}>See plans</button>}
-        {s.email && <p className="t-small muted">Signed in as {s.email}</p>}
+        {s.email && (
+          <div className="row-actions">
+            <p className="t-small muted">Signed in as {s.email}</p>
+            <button className="btn ghost" onClick={() => { if (!s.demo) void api.logout().catch(() => undefined); d({ type: 'patch', patch: { email: null } }); }}>Sign out</button>
+          </div>
+        )}
       </section>
 
       <section aria-labelledby="set-privacy">
@@ -104,7 +147,7 @@ export function Settings() {
         </div>
       </section>
 
-      <section className="proto" aria-labelledby="set-proto">
+      {(s.demo || protoMode()) && <section className="proto" aria-labelledby="set-proto">
         <h2 id="set-proto" className="t-heading">Prototype controls</h2>
         <p className="t-small muted">For reviewing the design. Not part of the real app.</p>
         <p className="t-small">Weather</p>
@@ -128,7 +171,7 @@ export function Settings() {
           <Chip on={false} onClick={() => { d({ type: 'patch', patch: { checkInFor: '2000-01-01' } }); d({ type: 'go', route: 'today' }); }}>Show morning check-in</Chip>
           <Chip on={false} onClick={() => { d({ type: 'loadSample' }); d({ type: 'toast', text: 'Sample closet loaded' }); }}>Load sample closet</Chip>
         </div>
-      </section>
+      </section>}
 
       {sheet === 'install' && <InstallSheet onClose={() => setSheet(null)} />}
       {sheet === 'notify' && <NotifySheet onClose={() => setSheet(null)} />}
@@ -143,7 +186,13 @@ export function Settings() {
           <button
             className="btn danger"
             disabled={typed.trim().toLowerCase() !== 'delete'}
-            onClick={async () => { await resetEverything(); d({ type: 'reset' }); }}
+            onClick={async () => {
+              if (s.email && !s.demo) {
+                try { await api.deleteMe(); } catch { d({ type: 'toast', text: 'We couldn’t reach the server. Try again when you’re online.' }); return; }
+              }
+              await resetEverything();
+              d({ type: 'reset' });
+            }}
           >
             Delete everything
           </button>

@@ -186,8 +186,12 @@ Scoring for each item is in [feature-shortlist.md](./feature-shortlist.md).
 | Strong overlap with Layerly or Acloset | Med | Med | Lead with time-window layering, 3-minute setup, privacy. Test Layerly before gate 2 |
 | App Review rejection (weather attribution, permission strings, privacy labels) | Med | Med | Phase 4 checklist and attribution component built into the weather card |
 
-## 11. Decisions still open (gate 2)
-- **G2-1:** Should the server keep closet photos as a backup (recommended, so the closet "is remembered" even if the browser storage is wiped), or should photos stay device-only?
-- **G2-2:** MET Norway (free, light) or self-hosted Open-Meteo (about 50–150 GB of disk and sync jobs)? MET's terms must be accepted by you personally, not by an agent.
-- **G2-3:** Payment provider, which depends on your company's country.
-- **G2-4:** Does the trial require an email at the start (recommended), or can users start without an account?
+## 11. Gate-2 decisions (taken on the owner's go-ahead, 17 Nov 2026)
+| # | Decision | Status |
+|---|---|---|
+| G2-1 | Closet and photos are **backed up to the server** per account, and restored on a new phone at sign-in | Built |
+| G2-2 | Weather from **MET Norway** via our API, cached per ~11 km cell. Self-hosted Open-Meteo stays an option for later | Built. The owner must accept MET's terms |
+| G2-3 | Payment provider **not chosen yet**. The checkout endpoint answers "not configured", the paywall says subscriptions open soon, and the admin can grant subscriptions by hand | Pending: depends on the company's country |
+| G2-4 | **Email at the start of the trial** (6-digit code). No "skip". An "I already have an account" path exists for new phones | Built |
+| G2-5 | Background removal on our server with **rembg + u2net** (Apache-2.0, ~1.2 GB RAM, ~1.5 s/photo). `isnet-general-use` (Apache-2.0) on 4 GB+ servers. BiRefNet was rejected: it used more than 6 GB RAM in testing | Built |
+| G2-6 | After the user's return time, Today shows **tomorrow's** outfit | Built |

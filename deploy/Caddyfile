@@ -1,20 +1,8 @@
 # SITE_ADDRESS comes from .env:
 #   app.example.com  -> Caddy gets a free HTTPS certificate automatically (needed for PWA install + push)
-#   :80              -> plain HTTP on the server IP (for a quick test only)
+#   :80              -> plain HTTP on the server IP (quick test only; set COOKIE_SECURE=false too)
 {$SITE_ADDRESS::80} {
-	root * /srv
 	encode zstd gzip
-
-	# Hashed build files never change: cache for a year
-	@immutable path /assets/*
-	header @immutable Cache-Control "public, max-age=31536000, immutable"
-
-	# These must always be re-checked so updates reach users
-	@fresh path / /index.html /sw.js /registerSW.js /manifest.webmanifest
-	header @fresh Cache-Control "no-cache"
-
-	@manifest path /manifest.webmanifest
-	header @manifest Content-Type "application/manifest+json"
 
 	header {
 		X-Content-Type-Options "nosniff"
@@ -23,7 +11,31 @@
 		-Server
 	}
 
-	# Single-page app: unknown paths fall back to index.html
-	try_files {path} /index.html
-	file_server
+	# API: auth, weather, cut-out, closet backup, push
+	handle /api/* {
+		request_body {
+			max_size 10MB
+		}
+		reverse_proxy api:3000
+	}
+
+	# The PWA itself
+	handle {
+		root * /srv
+
+		# Hashed build files never change: cache for a year
+		@immutable path /assets/*
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+		# These must always be re-checked so updates reach users
+		@fresh path / /index.html /sw.js /registerSW.js /manifest.webmanifest
+		header @fresh Cache-Control "no-cache"
+
+		@manifest path /manifest.webmanifest
+		header @manifest Content-Type "application/manifest+json"
+
+		# Single-page app: unknown paths fall back to index.html
+		try_files {path} /index.html
+		file_server
+	}
 }

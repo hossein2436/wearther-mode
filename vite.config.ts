@@ -8,6 +8,10 @@ export default defineConfig({
     react(),
     process.env.ARTIFACT ? null : VitePWA({
       registerType: 'autoUpdate',
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      injectManifest: { globPatterns: ['**/*.{js,css,html,svg,png}'] },
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Wearther Mode',
@@ -25,13 +29,8 @@ export default defineConfig({
           { src: 'maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png}'],
-        runtimeCaching: [
-          { urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/, handler: 'CacheFirst', options: { cacheName: 'fonts', expiration: { maxEntries: 20, maxAgeSeconds: 31536000 } } },
-        ],
-      },
     }),
   ],
+  server: { proxy: { '/api': 'http://localhost:3000' } },
   test: { include: ['src/**/*.test.ts'] },
 })

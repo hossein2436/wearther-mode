@@ -7,6 +7,8 @@ import { STARTER, SLOT_LABEL } from '../data/catalog';
 import { missingSlots } from '../engine';
 import { AddFlow } from './AddFlow';
 import { requestPersistence } from '../state/db';
+import { api, ApiError } from '../api';
+import { restore } from '../state/sync';
 
 export function Welcome() {
   const { d } = useStore();
@@ -28,6 +30,7 @@ export function Welcome() {
       <div className="stack-actions">
         <button className="btn primary" onClick={() => d({ type: 'go', route: 'onb-day' })}>Start with 15 items</button>
         <p className="t-small muted center">Free for 7 days. No card needed.</p>
+        <button className="btn ghost" onClick={() => d({ type: 'go', route: 'signin' })}>I already have an account</button>
       </div>
     </main>
   );
@@ -94,16 +97,42 @@ export function OnbThermal() {
 
 export function OnbPlace() {
   const { s, d } = useStore();
-  const [asked, setAsked] = useState(false);
   const [city, setCity] = useState(s.place);
-  const useLocation = () => {
-    setAsked(true);
-    navigator.geolocation?.getCurrentPosition(
-      () => d({ type: 'go', route: 'starter' }),
-      () => d({ type: 'toast', text: 'No problem. Type your city instead.' }),
-      { maximumAge: 3_600_000, timeout: 8000 },
+  const [busy, setBusy] = useState<'gps' | 'city' | null>(null);
+  const [error, setError] = useState('');
+
+  const locateMe = () => {
+    if (!navigator.geolocation) return setError('This browser can’t share your location. Type your city instead.');
+    setBusy('gps');
+    setError('');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const coords = { lat: Math.round(pos.coords.latitude * 100) / 100, lon: Math.round(pos.coords.longitude * 100) / 100 };
+        d({ type: 'patch', patch: { coords } });
+        setBusy(null);
+        d({ type: 'go', route: 'starter' });
+      },
+      () => { setBusy(null); setError('No problem. Type your city instead.'); },
+      { maximumAge: 3_600_000, timeout: 10_000 },
     );
   };
+
+  const lookUpCity = async () => {
+    const q = city.trim();
+    if (!q) return setError('Type a city, like London or Toronto.');
+    setBusy('city');
+    setError('');
+    try {
+      const g = s.demo ? { name: q, lat: 0, lon: 0 } : await api.geocode(q);
+      d({ type: 'patch', patch: { place: g.name, coords: s.demo ? null : { lat: g.lat, lon: g.lon } } });
+      d({ type: 'go', route: 'starter' });
+    } catch (e) {
+      setError(e instanceof ApiError && e.code === 'offline' ? 'You’re offline. Connect and try again.' : `We couldn’t find “${q}”. Try the nearest big city.`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <main className="screen">
       <Progress step={3} of={4} />
@@ -112,22 +141,18 @@ export function OnbPlace() {
         We use your location to get the forecast. Only a rough area, about the size of a town, is sent to our server.
       </p>
       <div className="stack-actions">
-        <button className="btn primary" onClick={useLocation}>Use my location</button>
+        <button className="btn primary" onClick={locateMe} disabled={busy !== null}>
+          {busy === 'gps' ? 'Finding you…' : 'Use my location'}
+        </button>
       </div>
-      <form
-        className="city-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          d({ type: 'patch', patch: { place: city.trim() || s.place } });
-          d({ type: 'go', route: 'starter' });
-        }}
-      >
+      <form className="city-form" onSubmit={(e) => { e.preventDefault(); void lookUpCity(); }}>
         <label className="field">
-          <span>{asked ? 'Or type your city' : 'Or type your city instead'}</span>
+          <span>Or type your city instead</span>
           <input value={city} onChange={(e) => setCity(e.target.value)} autoComplete="address-level2" />
         </label>
-        <button className="btn secondary" type="submit">Use this city</button>
+        <button className="btn secondary" type="submit" disabled={busy !== null}>{busy === 'city' ? 'Looking it up…' : 'Use this city'}</button>
       </form>
+      {error && <p className="note" role="alert">{error}</p>}
     </main>
   );
 }
@@ -189,7 +214,46 @@ export function SignIn() {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   const valid = /.+@.+\..+/.test(email);
+
+  const messages: Record<string, string> = {
+    offline: 'You’re offline. Connect and try again.',
+    invalid_email: 'That email doesn’t look right.',
+    wrong_code: 'That code isn’t right. Check the email and try again.',
+    code_expired: 'That code has expired. Ask for a new one.',
+    too_many_requests: 'Too many tries. Wait a few minutes and try again.',
+  };
+  const fail = (e: unknown) => setError(messages[e instanceof ApiError ? e.code : ''] ?? 'Something went wrong. Try again.');
+
+  const send = async () => {
+    setBusy(true); setError('');
+    try {
+      if (!s.demo) await api.requestCode(email);
+      setSent(true);
+    } catch (e) { fail(e); } finally { setBusy(false); }
+  };
+
+  const verify = async () => {
+    setBusy(true); setError('');
+    try {
+      if (s.demo) {
+        d({ type: 'patch', patch: { email, trialStart: s.isoToday, onboarded: true } });
+      } else {
+        const { user } = await api.verify(email, code);
+        // Signing in on a new phone: bring the closet back from the backup.
+        const backup = s.closet.length ? null : await api.getCloset().catch(() => null);
+        d({ type: 'patch', patch: {
+          email: user.email, trialStart: user.trialStart, subscribed: user.subscribed, onboarded: true,
+          ...(backup?.data ? restore(backup.data) : {}),
+        } });
+      }
+      void requestPersistence();
+      d({ type: 'go', route: 'today' });
+    } catch (e) { fail(e); } finally { setBusy(false); }
+  };
+
   return (
     <main className="screen">
       <h1 className="t-title">Save your closet</h1>
@@ -197,37 +261,25 @@ export function SignIn() {
         Your photos stay on this phone and are backed up to your account, so they’re still here if you change phones. Saving starts your free week.
       </p>
       {!sent ? (
-        <form className="city-form" onSubmit={(e) => { e.preventDefault(); if (valid) setSent(true); }}>
+        <form className="city-form" onSubmit={(e) => { e.preventDefault(); if (valid) void send(); }}>
           <label className="field">
             <span>Email</span>
             <input type="email" inputMode="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </label>
-          <button className="btn primary" type="submit" disabled={!valid}>Email me a code</button>
+          <button className="btn primary" type="submit" disabled={!valid || busy}>{busy ? 'Sending…' : 'Email me a code'}</button>
         </form>
       ) : (
-        <form
-          className="city-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (code.length !== 6) return;
-            d({ type: 'patch', patch: { email, trialStart: s.isoToday, onboarded: true } });
-            d({ type: 'go', route: 'today' });
-          }}
-        >
+        <form className="city-form" onSubmit={(e) => { e.preventDefault(); if (code.length === 6) void verify(); }}>
           <p className="t-body">We sent a 6-digit code to {email}.</p>
           <label className="field">
             <span>Code</span>
             <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} />
           </label>
-          <button className="btn primary" type="submit" disabled={code.length !== 6}>Start my free week</button>
-          <p className="t-small muted">Prototype: any 6 digits work.</p>
+          <button className="btn primary" type="submit" disabled={code.length !== 6 || busy}>{busy ? 'Checking…' : 'Start my free week'}</button>
+          <button className="btn ghost" type="button" onClick={() => { setSent(false); setCode(''); }}>Use a different email</button>
         </form>
       )}
-      <div className="stack-actions">
-        <button className="btn ghost" onClick={() => { d({ type: 'patch', patch: { onboarded: true, trialStart: s.isoToday } }); d({ type: 'go', route: 'today' }); }}>
-          Skip for now
-        </button>
-      </div>
+      {error && <p className="note" role="alert">{error}</p>}
     </main>
   );
 }

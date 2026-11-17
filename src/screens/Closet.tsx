@@ -5,6 +5,7 @@ import { Header, Chip, Sheet } from '../components/ui';
 import { ItemVisual } from '../components/Garment';
 import { Icon } from '../components/Icon';
 import { TagEditor } from './TagEditor';
+import { api } from '../api';
 
 const FILTERS: { id: string; label: string; test: (i: Item) => boolean }[] = [
   { id: 'all', label: 'All', test: () => true },
@@ -116,7 +117,11 @@ export function ItemDetail() {
       {confirmDelete && (
         <Sheet title={`Delete ${orig.name}?`} onClose={() => setConfirmDelete(false)}>
           <p className="t-body">It won’t be suggested again and its photo is removed. Your wear history stays.</p>
-          <button className="btn danger" onClick={() => { d({ type: 'deleteItem', id: orig.id }); d({ type: 'toast', text: `${orig.name} deleted` }); }}>
+          <button className="btn danger" onClick={() => {
+            if (s.email && !s.demo && orig.photoSynced) void api.deleteImage(orig.id).catch(() => undefined);
+            d({ type: 'deleteItem', id: orig.id });
+            d({ type: 'toast', text: `${orig.name} deleted` });
+          }}>
             Delete
           </button>
           <button className="btn ghost" onClick={() => setConfirmDelete(false)}>Keep it</button>

@@ -3,6 +3,7 @@ import type { DayWindow, Item, Thermal } from '../types';
 import { sampleCloset, type ScenarioId } from '../data/mock';
 import { load, save, clearAll } from './db';
 import { pairKey } from '../engine';
+import type { WeatherResponse } from '../api';
 
 export type Route =
   | 'welcome' | 'onb-day' | 'onb-thermal' | 'onb-place' | 'starter'
@@ -25,6 +26,8 @@ export interface State {
   thermal: Thermal;
   learnedOffset: number;
   place: string;
+  coords: { lat: number; lon: number } | null;
+  forecast: WeatherResponse | null;
   units: 'C' | 'F';
   notifyAt: string | null;
   email: string | null;
@@ -41,9 +44,13 @@ export interface State {
   simDay: number | null; // override trial day
   offline: boolean;
   isoToday: string;
+  /** Review link or prototype: uses scenario weather and no server. */
+  demo: boolean;
 }
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
+/** Local calendar date, YYYY-MM-DD. */
+export const todayIso = (d = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 export const initialState: State = {
   route: 'welcome',
@@ -52,7 +59,9 @@ export const initialState: State = {
   win: { leave: 8, back: 18 },
   thermal: 'neutral',
   learnedOffset: 0,
-  place: 'London',
+  place: '',
+  coords: null,
+  forecast: null,
   units: 'C',
   notifyAt: null,
   email: null,
@@ -68,6 +77,7 @@ export const initialState: State = {
   simDay: null,
   offline: false,
   isoToday: todayIso(),
+  demo: false,
 };
 
 export type Action =
@@ -139,19 +149,19 @@ function reducer(s: State, a: Action): State {
     case 'hydrate':
       return { ...s, ...a.state, drafts: [], toast: null, isoToday: todayIso() };
     case 'reset':
-      return { ...initialState, isoToday: todayIso() };
+      return { ...initialState, isoToday: todayIso(), demo: s.demo };
   }
 }
 
 const Ctx = createContext<{ s: State; d: (a: Action) => void } | null>(null);
 
 const PERSIST: (keyof State)[] = [
-  'onboarded', 'closet', 'win', 'thermal', 'learnedOffset', 'place', 'units', 'notifyAt', 'email',
+  'onboarded', 'closet', 'win', 'thermal', 'learnedOffset', 'place', 'coords', 'forecast', 'units', 'notifyAt', 'email',
   'trialStart', 'subscribed', 'pairWeights', 'worn', 'checkInFor', 'autoWashAfter', 'scenario', 'simDay',
 ];
 
 export function StoreProvider({ children, initial }: { children: ReactNode; initial?: Partial<State> }) {
-  const [s, d] = useReducer(reducer, { ...initialState, ...initial });
+  const [s, d] = useReducer(reducer, { ...initialState, ...initial, demo: !!initial });
   const hydrated = useRef(!!initial);
 
   useEffect(() => {

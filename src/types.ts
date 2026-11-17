@@ -29,6 +29,8 @@ export interface Item {
   lastWorn?: string;
   /** Object URL or data URL of the user's own cutout photo. */
   photo?: string;
+  /** True once the photo is backed up to the server. */
+  photoSynced?: boolean;
   addedAt: string;
 }
 

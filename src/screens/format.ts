@@ -14,3 +14,6 @@ export function timeOf(iso: string): string {
 export const isStandalone = () =>
   typeof window !== 'undefined' &&
   (window.matchMedia?.('(display-mode: standalone)').matches || (navigator as unknown as { standalone?: boolean }).standalone === true);
+
+/** Prototype helpers (sample clothes, weather scenarios) show only in review links or with ?proto. */
+export const protoMode = () => typeof location !== 'undefined' && new URLSearchParams(location.search).has('proto');
