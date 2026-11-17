@@ -141,9 +141,9 @@ export function Today() {
         <section className="card" aria-labelledby="checkin-title">
           <h2 id="checkin-title" className="t-title">How was yesterday’s outfit?</h2>
           <div className="feel-row">
-            <button className="btn secondary" onClick={() => d({ type: 'checkIn', feel: 'cold' })}>🥶 Cold</button>
-            <button className="btn secondary" onClick={() => d({ type: 'checkIn', feel: 'right' })}>👌 Right</button>
-            <button className="btn secondary" onClick={() => d({ type: 'checkIn', feel: 'warm' })}>🥵 Warm</button>
+            <button className="btn secondary" onClick={() => d({ type: 'checkIn', feel: 'cold' })}><WeatherGlyph kind="snow" still /> Too cold</button>
+            <button className="btn secondary" onClick={() => d({ type: 'checkIn', feel: 'right' })}><WeatherGlyph kind="partly" still /> Right</button>
+            <button className="btn secondary" onClick={() => d({ type: 'checkIn', feel: 'warm' })}><WeatherGlyph kind="heat" still /> Too warm</button>
           </div>
         </section>
       )}
@@ -205,7 +205,7 @@ export function Today() {
 
       {day !== null && day >= 5 && day <= 7 && !s.subscribed && (
         <div className="banner" role="note">
-          <span>✨ {8 - day} {8 - day === 1 ? 'day' : 'days'} left of your free week</span>
+          <span><Icon name="sparkle" size={14} fill /> {8 - day} {8 - day === 1 ? 'day' : 'days'} left of your free week</span>
           <button className="btn" onClick={() => setPlans(true)}>See plans</button>
         </div>
       )}
@@ -231,6 +231,7 @@ export function Today() {
 function Hours({ s, layer, nowHour, deg, outer }: { s: WindowSummary; layer: [number, number] | null; nowHour: number | null; deg: (c: number) => string; outer?: string }) {
   return (
     <>
+      {outer && layer && <p className="hours-key"><span><i />{outer} on, {hh(layer[0])}–{hh(layer[1] + 1)}</span></p>}
       <div className="hours" role="list" aria-label="Hour by hour">
         {s.hours.map((h, i) => {
           const on = !!layer && h.hour >= layer[0] && h.hour <= layer[1];
@@ -249,7 +250,6 @@ function Hours({ s, layer, nowHour, deg, outer }: { s: WindowSummary; layer: [nu
           );
         })}
       </div>
-      {outer && layer && <p className="hours-key"><span><i />{outer} on</span></p>}
     </>
   );
 }

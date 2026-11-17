@@ -50,7 +50,7 @@
 
 .app {
   --m1: var(--m1-base); --m2: var(--m2-base); --on: var(--on-base);
-  --on-2: color-mix(in srgb, var(--on) 80%, transparent);
+  --on-2: color-mix(in srgb, var(--on) 92%, transparent);
   --canvas: color-mix(in srgb, var(--m2) 26%, #f7f6f3);
   --accent: color-mix(in srgb, var(--m1) 82%, #000);
   --shadow: color-mix(in srgb, var(--glow) 40%, rgb(20 20 40 / 0.6));
