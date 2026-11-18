@@ -51,9 +51,10 @@ Laundry: `Closet → filter "In the wash" → Laundry done → all back to Avail
 ## Flow 5: Trial and paywall
 | Day | Experience |
 |---|---|
-| 1–4 | Full app. Small "Trial: 6 days left" line in Settings only |
-| 5–7 | Banner on Today: "Your free week ends Sunday. Keep getting outfits for $3.99/month." |
-| 8+ | Today shows the paywall sheet. Closet, item edit and export stay available. Subscribing brings Today straight back |
+| 1–4 | Full app, plus 1 picture of a look on you. Small "6 days of your free week left" line in Settings |
+| 5–7 | Banner on Today: "2 days left of your free week" with See plans |
+| 8+ | 3 free looks in total. A note above the look says how many are left ("Free look. 2 more after this, then $1.99 a month.") |
+| After the 3rd | Today shows "You've used your 3 free looks" and the paywall: one plan, $1.99/month, unlimited looks + 8 pictures on you a month. Closet, item edit and export stay available. Subscribing brings Today straight back |
 
 ## Flow 6: Install on Home Screen (iOS and Android)
 - **Android / Chrome:** a native install prompt appears after the first outfit (`beforeinstallprompt`).

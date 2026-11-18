@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type KeyboardEvent } from 'react';
-import { useStore, trialDay } from '../state/store';
+import { useStore, trialDay, accessOf } from '../state/store';
+import { PLAN } from '../plans';
 import { useDay } from '../state/day';
 import { missingSlots, pickLooks, signature, RAIN_THRESHOLD } from '../engine';
 import { bodyOrder, conditionLabel, pieceReasons } from '../engine/explain';
@@ -51,13 +52,23 @@ export function Today() {
   }, [looks, wornSig]);
 
   const day = trialDay(s);
-  const expired = !s.subscribed && day !== null && day >= 8;
+  const access = accessOf(s);
+  const metered = access.tier === 'free' || access.tier === 'locked';
   const missing = missingSlots(s.closet.filter((i) => i.status === 'available'));
-  const n = looks.length;
-  const look = n ? looks[((index % n) + n) % n] : undefined;
+  // Once the free looks are used, only the ones already shown stay browsable.
+  const shown = access.tier === 'locked' ? looks.filter((o) => s.freeLooksSeen.includes(signature(o.items))) : looks;
+  const n = shown.length;
+  const look = n ? shown[((index % n) + n) % n] : undefined;
   const lookSig = look ? signature(look.items) : '';
   const isWorn = !!look && lookSig === wornSig;
   const isLoved = s.loved.includes(lookSig);
+  // After the free week, each new look shown uses one of the free looks; the last one stays visible.
+  const expired = access.tier === 'locked' && n === 0;
+  const freeLeft = metered ? PLAN.freeLooks - s.freeLooksSeen.length : null;
+  useEffect(() => {
+    if (access.tier === 'free' && lookSig && !s.freeLooksSeen.includes(lookSig)) d({ type: 'seeFreeLook', sig: lookSig });
+  }, [access.tier, lookSig, s.freeLooksSeen, d]);
+
   const pieces = look ? bodyOrder(look.items) : [];
   const outer = look?.items.find((i) => i.slot === 'outer');
 
@@ -123,8 +134,8 @@ export function Today() {
 
       {expired ? (
         <section className="card">
-          <h2 className="t-title">Your free week is over</h2>
-          <p className="t-small muted">Your closet is safe. Pick a plan to keep getting a look every morning.</p>
+          <h2 className="t-title">You’ve used your {PLAN.freeLooks} free looks</h2>
+          <p className="t-small muted">Your closet is safe. For {PLAN.priceLabel} a month you get a look every morning, plus {PLAN.modelImagesPerMonth} pictures a month of a look on you.</p>
           <button className="btn primary" onClick={() => setPaywall(true)}>See plans</button>
         </section>
       ) : summary && missing.length ? (
@@ -144,12 +155,19 @@ export function Today() {
         </section>
       ) : summary && look ? (
         <>
+          {freeLeft !== null && (
+            <p className="free-note" role="status">
+              {freeLeft > 0
+                ? <>Free look. <b>{freeLeft} more</b> after this, then {PLAN.priceLabel} a month.</>
+                : <>This is your last free look. <button className="link" onClick={() => setPlans(true)}>See the plan</button></>}
+            </p>
+          )}
           <div className="look-meta">
             <span className="look-of">Look {(((index % n) + n) % n) + 1} of {n}</span>
             {n > 1 && (
               <div className="look-nav">
                 <button className="nav-arrow" aria-label="Previous look" onClick={() => setIndex((i) => i - 1)}>‹</button>
-                <span className="dots" aria-hidden="true">{looks.map((_, i) => <i key={i} className={i === ((index % n) + n) % n ? 'on' : ''} />)}</span>
+                <span className="dots" aria-hidden="true">{shown.map((_, i) => <i key={i} className={i === ((index % n) + n) % n ? 'on' : ''} />)}</span>
                 <button className="nav-arrow" aria-label="Next look" onClick={() => setIndex((i) => i + 1)}>›</button>
               </div>
             )}

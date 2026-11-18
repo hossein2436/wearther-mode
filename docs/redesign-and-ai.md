@@ -36,7 +36,7 @@ Screens: `docs/screens/redesign/` (`before-*`, `after-*`, `before-after.png`).
 - **Hosted APIs.** FASHN: about $0.075 per image on demand; its Try-On Max endpoint costs 4 credits per image. Google Vertex `virtual-try-on-001`: about $0.06 per image, but third-party trackers list it for deprecation on 15 Mar 2027.
 - **Open-source models.** Most popular ones (IDM-VTON, OOTDiffusion, CatVTON, StableVITON) are licensed non-commercial and can't ship in a paid app. FASHN VTON v1.5 (Jan 2026) is Apache-2.0, but it needs a GPU; our small server can't run it.
 
-**Unit cost:** try-on APIs dress one garment per call. A 3–4 piece outfit is therefore 2–3 chained calls, roughly $0.15–0.25 per render. A daily render for every user would cost more than the $3.99 subscription, so the feature must be **on tap, capped** (for example 10 renders a month) or a higher tier.
+**Unit cost:** try-on APIs dress one garment per call. A 3–4 piece outfit is therefore 2–3 chained calls, roughly $0.15–0.25 per render. A daily render for every user would cost more than the subscription, so the feature is **on tap and capped**: 8 renders a month on the $1.99 plan, 1 in the free week (decided 18 Nov 2026). At $0.15–0.25 a render, 8 renders cost $1.20–2.00. Payment fees take another $0.35–0.60 of the $1.99 (Stripe about 2.9% + $0.30; a merchant of record such as Paddle about 5% + $0.50). **A subscriber who uses all 8 renders can cost more than they pay.** Most won't use them all, but this must be watched. Levers: a cheaper single-call try-on model, fewer pieces per render, caching renders of the same look, or fewer renders per month.
 
 **Privacy:** a full-body photo is sensitive.
 - Explicit opt-in.

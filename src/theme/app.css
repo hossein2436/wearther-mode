@@ -455,3 +455,16 @@ img { max-width: 100%; display: block; }
 .empty-note { text-align: center; margin-top: var(--s5, 20px); }
 .tile-meta { white-space: nowrap; font-size: 12px; }
 @media (prefers-color-scheme: dark) { .tile-art { background: rgb(255 255 255 / 0.09); } }
+
+/* Plan: one card, one price (plans.ts). */
+.plan-card { border: 1.5px solid var(--ink); border-radius: var(--r-md, 20px); padding: var(--s4, 16px) var(--s4, 16px) var(--s3, 12px); background: var(--paper); }
+.plan-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s3, 12px); font-weight: 750; }
+.plan-price { color: var(--ink-2); font-weight: 600; font-size: var(--t-small, 14px); }
+.plan-price b { font-family: var(--font-display); font-size: 1.75rem; font-weight: 640; color: var(--ink); font-variant-numeric: tabular-nums; }
+.plan-list { list-style: none; margin: var(--s3, 12px) 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: var(--t-small, 14px); }
+.plan-list li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start; }
+.plan-list svg { color: var(--accent-ink); margin-top: 1px; }
+.free-note { font-size: var(--t-small, 14px); color: var(--ink-2); background: var(--accent-soft); border-radius: 14px; padding: 10px 14px; }
+.free-note b { color: var(--ink); }
+.free-note .link { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; min-height: 0; }
+.timeline .is-now .dot span { color: #fff; }

@@ -79,7 +79,7 @@ export const api = {
   pushUnsubscribe: () => call<{ ok: true }>('DELETE', '/api/push/subscribe', {}),
   tastePrior: () => call<{ weights: Record<string, number> }>('GET', '/api/taste/prior'),
   sendTaste: (events: { f: string[]; y: 1 | -1 }[]) => call<{ ok: true }>('POST', '/api/taste', { events }),
-  checkout: (plan: 'month' | 'year') => call<{ url: string }>('POST', '/api/billing/checkout', { plan }),
+  checkout: (plan: 'month') => call<{ url: string }>('POST', '/api/billing/checkout', { plan }),
 };
 
 export async function dataUrlToBlob(url: string): Promise<Blob> {

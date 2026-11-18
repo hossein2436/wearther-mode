@@ -1,3 +1,4 @@
+import { PLAN, accessFor, imagePeriod, type Access } from '../plans';
 import { createContext, useContext, useEffect, useReducer, useRef, type ReactNode } from 'react';
 import type { DayWindow, Item, Thermal } from '../types';
 import { sampleCloset, type ScenarioId } from '../data/mock';
@@ -43,6 +44,10 @@ export interface State {
   tasteQueue: { f: string[]; y: 1 | -1 }[];
   prior: Taste;
   loved: string[];
+  /** Looks (by signature) shown after the free week ended; capped at PLAN.freeLooks. */
+  freeLooksSeen: string[];
+  /** Pictures of a look on you made in a period (imagePeriod in plans.ts). */
+  modelImages: { period: string; used: number };
   worn: { date: string; ids: string[] }[];
   checkInFor: string | null; // date of the wear awaiting a check-in
   autoWashAfter: number;
@@ -83,6 +88,8 @@ export const initialState: State = {
   tasteQueue: [],
   prior: {},
   loved: [],
+  freeLooksSeen: [],
+  modelImages: { period: '', used: 0 },
   worn: [],
   checkInFor: null,
   autoWashAfter: 3,
@@ -105,6 +112,7 @@ export type Action =
   | { type: 'updateItem'; item: Item }
   | { type: 'deleteItem'; id: string }
   | { type: 'wear'; ids: string[] }
+  | { type: 'seeFreeLook'; sig: string }
   | { type: 'rate'; ids: string[]; delta: number }
   | { type: 'tasteSent'; n: number }
   | { type: 'feedback'; signal: Signal; ids: string[]; features: string[]; quiet?: boolean }
@@ -133,6 +141,10 @@ function reducer(s: State, a: Action): State {
       return { ...s, closet: s.closet.map((i) => (i.id === a.item.id ? a.item : i)) };
     case 'deleteItem':
       return { ...s, closet: s.closet.filter((i) => i.id !== a.id), route: 'closet' };
+    case 'seeFreeLook': {
+      if (s.freeLooksSeen.includes(a.sig) || s.freeLooksSeen.length >= PLAN.freeLooks) return s;
+      return { ...s, freeLooksSeen: [...s.freeLooksSeen, a.sig] };
+    }
     case 'wear': {
       const date = s.isoToday;
       const closet = s.closet.map((i) => {
@@ -195,7 +207,7 @@ const Ctx = createContext<{ s: State; d: (a: Action) => void } | null>(null);
 
 const PERSIST: (keyof State)[] = [
   'onboarded', 'closet', 'win', 'thermal', 'learnedOffset', 'place', 'coords', 'forecast', 'units', 'notifyAt', 'email',
-  'trialStart', 'subscribed', 'pairWeights', 'taste', 'tasteEvidence', 'shareTaste', 'tasteQueue', 'prior', 'loved', 'worn', 'checkInFor', 'autoWashAfter', 'scenario', 'simDay',
+  'trialStart', 'subscribed', 'pairWeights', 'taste', 'tasteEvidence', 'shareTaste', 'tasteQueue', 'prior', 'loved', 'freeLooksSeen', 'modelImages', 'worn', 'checkInFor', 'autoWashAfter', 'scenario', 'simDay',
 ];
 
 export function StoreProvider({ children, initial }: { children: ReactNode; initial?: Partial<State> }) {
@@ -233,6 +245,18 @@ export function useStore() {
 
 export async function resetEverything() {
   await clearAll();
+}
+
+/** What this user can see and make right now (plans.ts). */
+export function accessOf(s: State): Access {
+  const day = trialDay(s);
+  const subscribed = s.subscribed;
+  const tier = subscribed ? 'paid' : day === null || day <= PLAN.trialDays ? 'trial' : 'free';
+  const period = imagePeriod(s.isoToday, tier);
+  return accessFor({
+    subscribed, trialDay: day, freeLooksUsed: s.freeLooksSeen.length,
+    modelImagesUsed: s.modelImages.period === period ? s.modelImages.used : 0,
+  });
 }
 
 /** Trial day, 1-based. Day 8+ means the free week is over. */

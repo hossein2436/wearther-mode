@@ -97,13 +97,15 @@ Scoring for each item is in [feature-shortlist.md](./feature-shortlist.md).
   - Optional AI tagging (if approved): the image is sent over TLS, processed and **not stored**, and the toggle is opt-in.
 - **No ads, no data selling.** Analytics only if you approve them (D6).
 
-## 8. Monetization: **7-day free trial, then subscription** (decided at gate 1)
+## 8. Monetization: **7-day free trial, 3 free looks, then $1.99/month** (updated 18 Nov 2026; the rules live in `src/plans.ts`)
 - **The trial starts** when the user saves their closet (account created with an email one-time code). No card is needed to start.
 - **On day 5** an in-app banner appears, plus a push if the user has allowed notifications: "2 days left".
-- **On day 8** the Today screen shows the paywall:
+- **Free week (days 1–7):** every look, plus **1** picture of a look on you (AI try-on).
+- **From day 8 without the plan:** **3 more looks in total, ever.** Each new look shown uses one (a shuffle counts). No pictures on you. After the third, Today shows the paywall:
   - The closet stays viewable and exportable (we never hold user data hostage).
-  - Generating outfits needs a subscription.
-- **Price to test:** $3.99/mo or $24.99/yr `[hypothesis]`.
+  - The looks already shown stay browsable that day.
+- **The plan: $1.99 a month, monthly only.** Unlimited looks from the user's own closet (the flat lay, no AI image), plus **8 pictures a month** of a look on you. The allowance resets each calendar month and doesn't roll over.
+- **Previous price test** ($3.99/mo or $24.99/yr) is retired.
 - **Payment provider:** decision G2-3. Web PWAs can't use App Store or Play billing. Stripe Billing or a merchant-of-record such as Paddle or Lemon Squeezy (they handle global sales tax) both support trials. The owner's legal entity and country decide which providers are available.
 
 ## 8-old. Earlier recommendation (superseded)

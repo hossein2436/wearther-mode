@@ -1,26 +1,26 @@
 import { useState } from 'react';
 import { Sheet } from '../components/ui';
 import { Icon } from '../components/Icon';
-import { WeatherGlyph } from '../components/WeatherGlyph';
-import { useStore, trialDay } from '../state/store';
+import { useStore, trialDay, accessOf } from '../state/store';
+import { PLAN } from '../plans';
 import { api, ApiError, tz } from '../api';
 
 export function PaywallSheet({ onClose }: { onClose?: () => void }) {
   const { s, d } = useStore();
-  const [plan, setPlan] = useState<'year' | 'month'>('year');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
+  const access = accessOf(s);
   const subscribe = async () => {
     if (s.demo) {
       d({ type: 'patch', patch: { subscribed: true } });
-      d({ type: 'toast', text: 'You’re subscribed. Welcome back.' });
+      d({ type: 'toast', text: 'You’re subscribed. Thank you.' });
       onClose?.();
       return;
     }
     setBusy(true);
     setMsg('');
     try {
-      const { url } = await api.checkout(plan);
+      const { url } = await api.checkout('month');
       location.href = url;
     } catch (e) {
       setMsg(e instanceof ApiError && e.status === 501
@@ -31,19 +31,17 @@ export function PaywallSheet({ onClose }: { onClose?: () => void }) {
     }
   };
   const day = trialDay(s) ?? 1;
-  const over = day >= 8;
+  const after = PLAN.trialDays + 1;
   const steps = [
-    { d: 1, title: 'Your free week starts', text: 'Every look, every morning, free.' },
-    { d: 6, title: 'We remind you', text: 'An email two days before it ends.' },
-    { d: 8, title: 'Pick a plan to keep going', text: 'No card until then. Your closet is yours either way.' },
+    { d: 1, title: 'Your free week starts', text: `Every look, every morning, plus ${PLAN.trialModelImages} picture of a look on you.` },
+    { d: PLAN.trialDays - 1, title: 'We remind you', text: 'An email two days before it ends.' },
+    { d: after, title: `${PLAN.freeLooks} more free looks`, text: 'Then pick the plan to keep going. No card until then.' },
   ];
   const upcoming = steps.find((y) => y.d >= day);
+  const title = access.tier === 'locked' ? `You’ve used your ${PLAN.freeLooks} free looks`
+    : access.tier === 'free' ? 'Your free week is over' : 'How your free week works';
   return (
-    <Sheet title={over ? 'Your free week is over' : 'How your free week works'} onClose={onClose}>
-      <div className="pay-hero">
-        <WeatherGlyph kind="sun" />
-        <p className="t-title">Every morning, a look that suits the sky.</p>
-      </div>
+    <Sheet title={title} onClose={onClose}>
       <ol className="timeline">
         {steps.map((x) => (
           <li key={x.d} className={day > x.d ? 'is-past' : x === upcoming ? 'is-now' : ''}>
@@ -52,24 +50,19 @@ export function PaywallSheet({ onClose }: { onClose?: () => void }) {
           </li>
         ))}
       </ol>
-      <div className="plans" role="radiogroup" aria-label="Choose a plan">
-        <button role="radio" aria-checked={plan === 'year'} className="plan" onClick={() => setPlan('year')}>
-          <span className="plan-flag">Save 48%</span>
-          <span className="plan-name">Yearly</span>
-          <span className="plan-price">$24.99</span>
-          <span className="plan-note">About $2.08 a month</span>
-        </button>
-        <button role="radio" aria-checked={plan === 'month'} className="plan" onClick={() => setPlan('month')}>
-          <span className="plan-name">Monthly</span>
-          <span className="plan-price">$3.99</span>
-          <span className="plan-note">Cancel any time</span>
-        </button>
-      </div>
+      <section className="plan-card" aria-labelledby="plan-name">
+        <p className="plan-head"><span id="plan-name">Wearther Mode</span><span className="plan-price"><b>{PLAN.priceLabel}</b> a month</span></p>
+        <ul className="plan-list">
+          <li><Icon name="check" size={18} /> A look from your own closet every morning, as many as you like</li>
+          <li><Icon name="check" size={18} /> {PLAN.modelImagesPerMonth} pictures a month of a look on you</li>
+          <li><Icon name="check" size={18} /> Cancel any time</li>
+        </ul>
+      </section>
       <button className="btn primary lg block" onClick={() => void subscribe()} disabled={busy}>
-        {busy ? 'Opening checkout…' : `Subscribe ${plan === 'year' ? 'yearly' : 'monthly'}`}
+        {busy ? 'Opening checkout…' : `Subscribe for ${PLAN.priceLabel} a month`}
       </button>
       {msg && <p className="note" role="status">{msg}</p>}
-      <p className="t-micro muted center">You can still browse and export your closet without a plan.</p>
+      <p className="t-micro muted center">Without the plan you can still browse and export your closet.</p>
     </Sheet>
   );
 }

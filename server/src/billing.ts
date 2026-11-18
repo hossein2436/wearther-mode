@@ -1,4 +1,6 @@
-export const TRIAL_DAYS = 7;
+import { PLAN } from '../../src/plans';
+
+export const TRIAL_DAYS = PLAN.trialDays;
 
 export interface UserRow {
   id: string;

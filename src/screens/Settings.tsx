@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useStore, trialDay, resetEverything } from '../state/store';
+import { useStore, trialDay, resetEverything, accessOf } from '../state/store';
+import { PLAN } from '../plans';
 import { Header, Chip, Sheet } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { ThermalChips } from './Onboarding';
@@ -53,10 +54,13 @@ export function Settings() {
     URL.revokeObjectURL(a.href);
     d({ type: 'toast', text: 'Closet exported' });
   };
-  const subText = s.subscribed ? 'Subscribed. Thank you.'
-    : day === null ? 'Starts when you save your closet'
-    : day >= 8 ? 'Free week ended'
-    : `${8 - day} ${8 - day === 1 ? 'day' : 'days'} of your free week left`;
+  const access = accessOf(s);
+  const pics = (n: number) => `${n} ${n === 1 ? 'picture' : 'pictures'} on you left`;
+  const subText = access.tier === 'paid' ? `${PLAN.priceLabel} a month. ${pics(access.modelImagesLeft)} this month.`
+    : day === null ? 'Your free week starts when you save your closet'
+    : access.tier === 'trial' ? `${PLAN.trialDays + 1 - day} ${PLAN.trialDays + 1 - day === 1 ? 'day' : 'days'} of your free week left`
+    : access.tier === 'free' ? `Free week ended. ${access.looksLeft} free ${access.looksLeft === 1 ? 'look' : 'looks'} left.`
+    : 'Free looks used. Pick the plan to keep going.';
 
   return (
     <main className="screen has-tabs">
@@ -194,7 +198,7 @@ export function Settings() {
           </div>
           <div className="chips">
             {[null, 1, 5, 8].map((v) => (
-              <Chip key={String(v)} on={s.simDay === v} onClick={() => d({ type: 'patch', patch: { simDay: v, subscribed: false } })}>{v === null ? 'Real trial' : `Day ${v}`}</Chip>
+              <Chip key={String(v)} on={s.simDay === v} onClick={() => d({ type: 'patch', patch: { simDay: v, subscribed: false, freeLooksSeen: [] } })}>{v === null ? 'Real trial' : `Day ${v}`}</Chip>
             ))}
           </div>
           <div className="chips">
