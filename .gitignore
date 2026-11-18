@@ -30,3 +30,4 @@ dist-artifact
 # Local API data
 server/.data
 __pycache__/
+.projdocs/
