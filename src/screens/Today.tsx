@@ -1,52 +1,28 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { useStore, trialDay } from '../state/store';
 import { useDay } from '../state/day';
-import { missingSlots, pickLooks, signature } from '../engine';
-import type { WindowSummary } from '../types';
-import { Scene, confettiFrom } from '../components/Scene';
-import { LookDeck } from '../components/Look';
+import { missingSlots, pickLooks, signature, RAIN_THRESHOLD } from '../engine';
+import { bodyOrder, conditionLabel, pieceReasons } from '../engine/explain';
+import type { Item, Slot, WindowSummary } from '../types';
+import { SLOT_LABEL } from '../data/catalog';
+import { ItemVisual } from '../components/Garment';
 import { Icon } from '../components/Icon';
-import { WeatherGlyph, glyphForHour, glyphForMood } from '../components/WeatherGlyph';
+import { WeatherGlyph } from '../components/WeatherGlyph';
 import { degFor, isStandalone, timeOf } from './format';
 import { PaywallSheet, InstallSheet } from './Sheets';
 
 const hh = (h: number) => `${String(h).padStart(2, '0')}:00`;
 const INSTALL_KEY = 'wm-hide-install';
 const installHidden = () => { try { return localStorage.getItem(INSTALL_KEY) === '1'; } catch { return false; } };
-const press = (key: 'ArrowLeft' | 'ArrowRight') =>
-  document.querySelector<HTMLElement>('.deck')?.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
-
-/** Count up to a number once, quickly, the first time it appears. */
-function useCountUp(target: number, ms = 750): number {
-  const [v, setV] = useState(target);
-  const first = useRef(true);
-  useEffect(() => {
-    if (!first.current || matchMedia('(prefers-reduced-motion: reduce)').matches) { setV(target); return; }
-    first.current = false;
-    const from = target - 12, t0 = performance.now();
-    let raf = 0;
-    const step = (t: number) => {
-      const k = Math.min(1, (t - t0) / ms);
-      setV(Math.round(from + (target - from) * (1 - (1 - k) ** 3)));
-      if (k < 1) raf = requestAnimationFrame(step);
-    };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [target, ms]);
-  return v;
-}
-
-function CountUp({ value, fmt, className }: { value: number; fmt: (n: number) => string; className: string }) {
-  return <span className={className} aria-hidden="true">{fmt(useCountUp(value))}</span>;
-}
+/** Widths shrink down the body so the stack reads as one dressed figure. */
+const BODY_WIDTH: Record<Slot, number> = { outer: 188, mid: 148, top: 148, onepiece: 172, bottom: 138, shoes: 112 };
 
 export function Today() {
   const { s, d } = useStore();
-  const { tomorrow, dayIso, forecast, summary, stale, mood, now } = useDay();
+  const { tomorrow, dayIso, forecast, summary, stale, now } = useDay();
   const [kept, setKept] = useState<string[]>([]);
   const [index, setIndex] = useState(0);
   const [round, setRound] = useState(0);
-  const [justWorn, setJustWorn] = useState(false);
   const [paywall, setPaywall] = useState(true);
   const [plans, setPlans] = useState(false);
   const [install, setInstall] = useState(false);
@@ -59,9 +35,9 @@ export function Today() {
       ? pickLooks({
           closet: s.closet, summary, today: dayIso, pairWeights: s.pairWeights, recentOutfits: recent,
           taste: s.taste, prior: s.prior, evidence: s.tasteEvidence,
-        }, { locked: kept, n: 6 })
+        }, { locked: kept, n: 5 })
       : []),
-    // Taste is applied to the next deck, not mid-swipe, so the card under your thumb doesn't jump.
+    // Taste is applied to the next set of looks, not mid-browse, so the look on screen doesn't jump.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [s.closet, summary, dayIso, kept, round],
   );
@@ -77,63 +53,60 @@ export function Today() {
   const day = trialDay(s);
   const expired = !s.subscribed && day !== null && day >= 8;
   const missing = missingSlots(s.closet.filter((i) => i.status === 'available'));
-  const look = looks[index];
+  const n = looks.length;
+  const look = n ? looks[((index % n) + n) % n] : undefined;
   const lookSig = look ? signature(look.items) : '';
   const isWorn = !!look && lookSig === wornSig;
   const isLoved = s.loved.includes(lookSig);
-  const showDeck = !expired && !missing.length && !!summary && looks.length > 0;
+  const pieces = look ? bodyOrder(look.items) : [];
+  const outer = look?.items.find((i) => i.slot === 'outer');
 
   const signal = (sg: 'skip' | 'love' | 'wear') => {
     if (!look) return;
     d({ type: 'feedback', signal: sg, ids: look.items.map((i) => i.id), features: look.features, quiet: sg !== 'love' });
   };
-  const wear = (e: MouseEvent<HTMLButtonElement>) => {
+  const wear = () => {
     if (!look) return;
-    const r = e.currentTarget.getBoundingClientRect();
-    const css = getComputedStyle(e.currentTarget.closest('.app') ?? document.body);
-    confettiFrom(r.left + r.width / 2, r.top, [css.getPropertyValue('--m1'), css.getPropertyValue('--m2'), '#ff3d7f', '#ffffff', '#15161a', ...look.items.map((i) => i.color)]);
     d({ type: 'wear', ids: look.items.map((i) => i.id) });
     signal('wear');
-    setJustWorn(true);
-    window.setTimeout(() => setJustWorn(false), 1700);
+    d({ type: 'toast', text: 'Worn today ✓' });
+  };
+  const toggleKeep = (id: string) => { setKept((k) => (k.includes(id) ? k.filter((x) => x !== id) : [...k, id])); setIndex(0); };
+  const love = () => {
+    if (isLoved) d({ type: 'patch', patch: { loved: s.loved.filter((x) => x !== lookSig) } });
+    else signal('love');
   };
 
   return (
-    <main className={`screen has-tabs today${showDeck ? ' has-dock' : ''}`}>
-      <Scene mood={mood} />
-
+    <main className="screen has-tabs today">
       {!summary || !forecast ? (
         <section className="empty-state" aria-live="polite">
-          <WeatherGlyph kind="partly" />
           {!s.coords && !s.place ? (
             <>
               <h1 className="t-display">Where are you today?</h1>
-              <p className="t-body">We need your city to read the sky.</p>
+              <p className="t-body muted">We need your city to read the weather.</p>
               <button className="btn primary" onClick={() => d({ type: 'go', route: 'settings' })}>Set my city</button>
             </>
           ) : s.offline ? (
             <>
               <h1 className="t-display">You’re offline</h1>
-              <p className="t-body">Connect once to get the forecast for {s.place || 'your area'}.</p>
+              <p className="t-body muted">Connect once to get the forecast for {s.place || 'your area'}.</p>
             </>
           ) : (
-            <p className="working"><span className="spinner" aria-hidden="true" /> Reading the sky over {s.place || 'your area'}…</p>
+            <p className="working"><span className="spinner" aria-hidden="true" /> Getting the forecast for {s.place || 'your area'}…</p>
           )}
         </section>
       ) : (
-        <header aria-labelledby="verdict">
-          <span className="place-pill"><Icon name="pin" size={16} duo /> {forecast.place} <span>{tomorrow ? 'tomorrow' : shortDay(dayIso)}</span></span>
-          <div className="hero">
-            <div>
-              <p className="hero-temp" aria-label={`Feels like ${deg(summary.minFeels)} to ${deg(summary.maxFeels)}`}>
-                <CountUp className="t-hero" value={summary.minFeels} fmt={deg} />
-                {summary.maxFeels !== summary.minFeels && <><span className="sep" aria-hidden="true">/</span><CountUp className="t-hero" value={summary.maxFeels} fmt={deg} /></>}
-              </p>
-              <p className="hero-feels">Feels like, {hh(s.win.leave)} to {hh(s.win.back)}{stale ? `. Offline: from ${timeOf(forecast.fetchedAt)}` : ''}</p>
-            </div>
-            <WeatherGlyph kind={glyphForMood(mood)} />
+        <header aria-labelledby="verdict" className="stack" style={{ gap: 'var(--s3)' }}>
+          <p className="place-line"><b>{forecast.place}</b> · {tomorrow ? 'Tomorrow, ' : ''}{longDay(dayIso)}</p>
+          <div className="weather-strip">
+            <span className="mood-chip"><Icon name={summary.rainFrom !== null ? 'drop' : summary.maxFeels >= 22 ? 'sunny' : 'cloud'} size={16} /> {conditionLabel(summary)}</span>
+            <span className="temp-line">
+              {deg(summary.minFeels)}–{deg(summary.maxFeels)} <span>feels like</span> · Wind {wind(summary.maxWind, s.units)}
+            </span>
           </div>
-          <h1 id="verdict" className="verdict">{verdict(summary, s.win)}</h1>
+          {stale && <p className="t-micro muted">Offline. Forecast from {timeOf(forecast.fetchedAt)}.</p>}
+          <h1 id="verdict" className="verdict"><Verdict s={summary} win={s.win} outer={outer?.name} /></h1>
         </header>
       )}
 
@@ -164,48 +137,86 @@ export function Today() {
           </p>
           <button className="btn primary" onClick={() => d({ type: 'go', route: 'add' })}>Add clothes</button>
         </section>
-      ) : summary && !looks.length ? (
+      ) : summary && !look ? (
         <section className="card">
           <h2 className="t-title">Nothing in your closet suits this weather</h2>
           <p className="t-small muted">Check what’s in the wash, or add a layer for {deg(summary.minFeels)}.</p>
         </section>
-      ) : summary ? (
+      ) : summary && look ? (
         <>
-          <section aria-label="Your looks for the day">
-            <LookDeck
-              looks={looks}
-              index={index}
-              kept={kept}
-              onToggle={(id) => { navigator.vibrate?.(8); setKept((k) => (k.includes(id) ? k.filter((x) => x !== id) : [...k, id])); setIndex(0); }}
-              onSkip={() => { signal('skip'); setIndex((i) => i + 1); }}
-              onLove={() => { navigator.vibrate?.([10, 30, 10]); signal('love'); }}
-              onRestart={() => { setKept([]); setIndex(0); setRound((r) => r + 1); }}
-              wornSig={wornSig}
-              justWorn={justWorn}
-              lovedSigs={s.loved}
-            />
-          </section>
-          <Hours s={summary} layer={look?.layerHours ?? null} nowHour={tomorrow ? null : now.getHours()} deg={deg} outer={look?.items.find((i) => i.slot === 'outer')?.name} />
-          {look && <p className="why-weather">{look.style.length > 1 ? `${look.style[1]}. ` : ''}{look.why}</p>}
-          {look?.notes.map((n) => <p key={n} className="note">{n}</p>)}
+          <div className="look-meta">
+            <span className="look-of">Look {(((index % n) + n) % n) + 1} of {n}</span>
+            {n > 1 && (
+              <div className="look-nav">
+                <button className="nav-arrow" aria-label="Previous look" onClick={() => setIndex((i) => i - 1)}>‹</button>
+                <span className="dots" aria-hidden="true">{looks.map((_, i) => <i key={i} className={i === ((index % n) + n) % n ? 'on' : ''} />)}</span>
+                <button className="nav-arrow" aria-label="Next look" onClick={() => setIndex((i) => i + 1)}>›</button>
+              </div>
+            )}
+          </div>
 
-          {look && (
-            <div className="actions-dock">
-              <button className="round" aria-label="Another look" onClick={() => press('ArrowLeft')}><Icon name="x" size={28} /></button>
-              <button className={`btn primary${isWorn ? ' is-done' : ''}`} disabled={isWorn} onClick={wear}>
-                {isWorn ? <><Icon name="check" /> Wearing this</> : 'Wear this'}
+          <section className="body-stack" aria-label="Today’s outfit, laid out top to bottom like a body">
+            {isWorn && <span className="worn-note" style={{ marginBottom: 12 }}><Icon name="check" size={14} /> Worn today</span>}
+            {pieces.map((it) => (
+              <div key={it.id} className={`body-layer${kept.includes(it.id) ? ' is-kept' : ''}`} style={{ ['--w' as string]: `${BODY_WIDTH[it.slot]}px` } as CSSProperties}>
+                <div className="bl-photo"><ItemVisual item={it} /></div>
+                <span className="bl-tag">{roleOf(it)}</span>
+              </div>
+            ))}
+            <p className="body-note">Your pieces, laid out top to bottom, the way you’ll wear them.</p>
+          </section>
+
+          <div className="outfit-stack flat" role="list" aria-label="The pieces in this look">
+            {pieces.map((it) => {
+              const k = kept.includes(it.id);
+              return (
+                <div key={it.id} role="listitem" className={`piece-row${k ? ' is-kept' : ''}`}>
+                  <span className="piece-main">
+                    <span className="piece-art"><ItemVisual item={it} /></span>
+                    <span className="piece-info">
+                      <span className="nm">{it.name}</span>
+                      <span className="rl">{roleOf(it)}</span>
+                      <span className="kept-tag">Kept ✓</span>
+                    </span>
+                  </span>
+                  <button className="pin-btn" aria-pressed={k} aria-label={`${k ? 'Release' : 'Keep'} ${it.name} in the next looks`} onClick={() => toggleKeep(it.id)}>
+                    <Icon name="lock" size={18} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="actions">
+            <button className={`btn primary${isWorn ? ' is-done' : ''}`} disabled={isWorn} onClick={wear}>
+              {isWorn ? <><Icon name="check" /> Worn today</> : 'Wear this'}
+            </button>
+            <div className="actions-quiet">
+              <button className="btn-quiet" onClick={() => { signal('skip'); setIndex((i) => i + 1); if (n < 2) setRound((r) => r + 1); }}>
+                <Icon name="shuffle" size={18} /> Shuffle
               </button>
-              <button className={`round love${isLoved ? ' is-on' : ''}`} aria-label="Love this look" aria-pressed={isLoved} onClick={() => press('ArrowRight')}>
-                <Icon name="heart" size={26} fill />
+              <button className="btn-quiet" aria-pressed={isLoved} onClick={love}>
+                <Icon name="heart" size={18} /> {isLoved ? 'Loved' : 'Love'}
               </button>
             </div>
-          )}
+          </div>
+
+          <section className="why-card" aria-labelledby="why-title">
+            <h2 id="why-title" className="why-label">Why this look</h2>
+            <p className="why-lead">{look.style.length ? `${look.style.join('. ')}. ` : ''}{look.why}</p>
+            <ul className="why-list">
+              {pieceReasons(look.items, summary, deg).map((r) => <li key={r.id}><b>{r.name}</b>: {r.text}</li>)}
+            </ul>
+          </section>
+          {look.notes.map((x) => <p key={x} className="note">{x}</p>)}
+
+          <HourCard s={summary} deg={deg} layer={look.layerHours} outer={outer} win={s.win} nowHour={tomorrow ? null : now.getHours()} />
         </>
       ) : null}
 
       {day !== null && day >= 5 && day <= 7 && !s.subscribed && (
         <div className="banner" role="note">
-          <span><Icon name="sparkle" size={14} fill /> {8 - day} {8 - day === 1 ? 'day' : 'days'} left of your free week</span>
+          <span>{8 - day} {8 - day === 1 ? 'day' : 'days'} left of your free week</span>
           <button className="btn" onClick={() => setPlans(true)}>See plans</button>
         </div>
       )}
@@ -227,41 +238,98 @@ export function Today() {
   );
 }
 
-/** One glass capsule per hour you're out: an icon, the feels-like temperature, a bar when the coat is on. */
-function Hours({ s, layer, nowHour, deg, outer }: { s: WindowSummary; layer: [number, number] | null; nowHour: number | null; deg: (c: number) => string; outer?: string }) {
-  return (
-    <>
-      {outer && layer && <p className="hours-key"><span><i />{outer} on, {hh(layer[0])}–{hh(layer[1] + 1)}</span></p>}
-      <div className="hours" role="list" aria-label="Hour by hour">
-        {s.hours.map((h, i) => {
-          const on = !!layer && h.hour >= layer[0] && h.hour <= layer[1];
-          return (
-            <div
-              key={h.hour}
-              role="listitem"
-              className={`hour${h.hour === nowHour ? ' is-now' : ''}${on ? ' is-layer' : ''}`}
-              style={{ ['--i' as string]: i }}
-              aria-label={`${hh(h.hour)}, feels ${deg(h.feelsC)}${h.precipProb >= 50 ? ', rain likely' : ''}${on && outer ? `, ${outer} on` : ''}`}
-            >
-              <small>{h.hour === nowHour ? 'Now' : String(h.hour).padStart(2, '0')}</small>
-              <WeatherGlyph kind={glyphForHour(h)} className="mini" still />
-              <strong>{deg(h.feelsC)}</strong>
-            </div>
-          );
-        })}
-      </div>
-    </>
-  );
-}
+const ROLE: Record<Slot, string> = { outer: 'Outer', mid: 'Warm layer', top: 'Top', onepiece: 'Dress', bottom: 'Bottom', shoes: 'Shoes' };
+const roleOf = (it: Item) => ROLE[it.slot] ?? SLOT_LABEL[it.slot];
 
-function verdict(s: WindowSummary, win: { leave: number; back: number }): string {
+/** One sentence, like a forecaster would say it, with the rain time picked out in the mood colour. */
+function Verdict({ s, win, outer }: { s: WindowSummary; win: { leave: number; back: number }; outer?: string }) {
   const mean = (s.minFeels + s.maxFeels) / 2;
   const feel = mean < 4 ? 'Cold' : mean < 14 ? 'Cool' : mean < 20 ? 'Mild' : mean < 26 ? 'Warm' : 'Hot';
   const wind = s.maxWind >= 25 ? ' and windy' : '';
-  const rain = s.rainFrom === null ? `dry till ${hh(win.back)}` : s.rainFrom <= win.leave ? 'rain from the start' : `rain from ${hh(s.rainFrom)}`;
-  return `${feel}${wind}, ${rain}.`;
+  const coat = outer ? outer.toLowerCase().split(' ').slice(-1)[0] : null;
+  if (s.rainFrom !== null) {
+    return <>{feel}{wind}. Rain from <em>{s.rainFrom <= win.leave ? 'the start' : hh(s.rainFrom)}</em>{coat ? `, take the ${coat}.` : '.'}</>;
+  }
+  return <>{feel}{wind}, dry until <em>{hh(win.back)}</em>{coat ? `. Take the ${coat}.` : '.'}</>;
 }
 
-function shortDay(iso: string): string {
-  return new Date(`${iso}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' });
+function wind(kmh: number, units: 'C' | 'F'): string {
+  return units === 'F' ? `${Math.round(kmh / 1.609)} mph` : `${Math.round(kmh)} km/h`;
+}
+
+/** Feels-like across the hours you're out, as one curve: rain window shaded, tap a point to read it. */
+function HourCard({ s, deg, layer, outer, win, nowHour }: {
+  s: WindowSummary; deg: (c: number) => string; layer: [number, number] | null; outer?: Item;
+  win: { leave: number; back: number }; nowHour: number | null;
+}) {
+  const hours = s.hours;
+  const first = hours[0]?.hour ?? win.leave, last = hours[hours.length - 1]?.hour ?? win.back;
+  const startSel = nowHour !== null && nowHour >= first && nowHour <= last ? nowHour : Math.round((first + last) / 2);
+  const [sel, setSel] = useState(startSel);
+  if (hours.length < 2) return null;
+  const W = 320, H = 118, L = 14, R = 14, T = 16, B = 24;
+  const lo = Math.min(...hours.map((h) => h.feelsC)), hi = Math.max(...hours.map((h) => h.feelsC));
+  const span = Math.max(4, hi - lo);
+  const x = (h: number) => L + ((h - first) / (last - first)) * (W - L - R);
+  const y = (c: number) => T + (1 - (c - lo) / span) * (H - T - B);
+  const line = hours.map((h, i) => `${i ? 'L' : 'M'}${x(h.hour).toFixed(1)} ${y(h.feelsC).toFixed(1)}`).join(' ');
+  const area = `${line} L${x(last).toFixed(1)} ${H - B} L${x(first).toFixed(1)} ${H - B} Z`;
+  const wet = hours.filter((h) => h.precipProb >= RAIN_THRESHOLD).map((h) => h.hour);
+  const cur = hours.find((h) => h.hour === sel) ?? hours[0];
+  const mid = hours[Math.floor(hours.length / 2)].hour;
+  const key = (e: KeyboardEvent, h: number) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSel(h); } };
+  const lf = layer ? (layer[0] - first) / (last - first + 1) : 0;
+  const lw = layer ? (layer[1] + 1 - layer[0]) / (last - first + 1) : 0;
+  return (
+    <section className="hour-card" aria-labelledby="hours-title">
+      <h3 id="hours-title">Hour by hour, feels like</h3>
+      <div className="hour-curve">
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Feels like from ${deg(hours[0].feelsC)} at ${hh(first)} to ${deg(hours[hours.length - 1].feelsC)} at ${hh(last)}${wet.length ? `, rain likely from ${hh(wet[0])}` : ''}`}>
+          <defs>
+            <linearGradient id="hc-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="var(--accent)" stopOpacity="0.22" />
+              <stop offset="1" stopColor="var(--accent)" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {wet.length > 0 && (
+            <>
+              <rect x={x(wet[0]) - 8} y={T - 10} width={Math.max(16, x(wet[wet.length - 1]) - x(wet[0]) + 16)} height={H - B - T + 10} rx="6" fill="var(--accent-soft)" />
+              <text x={x(wet[0]) - 4} y={T - 1} fontSize="9" fontWeight="800" fill="var(--accent-ink)">RAIN</text>
+            </>
+          )}
+          <path d={area} fill="url(#hc-fill)" />
+          <path d={line} fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+          {hours.map((h) => (
+            <g key={h.hour} className="hour-point" role="button" tabIndex={0} aria-label={`${hh(h.hour)}, feels like ${deg(h.feelsC)}`}
+              aria-pressed={h.hour === sel} onClick={() => setSel(h.hour)} onKeyDown={(e) => key(e, h.hour)}>
+              <circle cx={x(h.hour)} cy={y(h.feelsC)} r="14" fill="transparent" />
+              <circle cx={x(h.hour)} cy={y(h.feelsC)} r={h.hour === sel ? 5.5 : 3.5} fill={h.hour === sel ? 'var(--accent)' : 'var(--paper)'} stroke="var(--accent)" strokeWidth="2" />
+            </g>
+          ))}
+          {[first, mid, last].map((h) => (
+            <text key={h} x={x(h)} y={H - 6} fontSize="10" fontWeight="600" fill="var(--ink-2)" textAnchor={h === first ? 'start' : h === last ? 'end' : 'middle'}>{hh(h)}</text>
+          ))}
+        </svg>
+      </div>
+      <p className="hour-read" aria-live="polite">
+        <b>{hh(cur.hour)}</b> · Feels like <b>{deg(cur.feelsC)}</b><span> · Rain {Math.round(cur.precipProb)}% likely</span>
+      </p>
+      <div className="layer-bar">
+        <div className="lb-track">
+          {outer && layer
+            ? <div className="lb-fill" style={{ left: `${lf * 100}%`, width: `${lw * 100}%` }} />
+            : <div className="lb-fill none" />}
+        </div>
+        <p>
+          {outer && layer
+            ? <><b>{outer.name} on {hh(layer[0])}–{hh(Math.min(layer[1] + 1, win.back))}</b> · out {hh(win.leave)}–{hh(win.back)}</>
+            : <>No coat needed · out {hh(win.leave)}–{hh(win.back)}</>}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function longDay(iso: string): string {
+  return new Date(`${iso}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
 }

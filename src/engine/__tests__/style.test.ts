@@ -93,3 +93,23 @@ describe('taste', () => {
     expect(base.style.length).toBeGreaterThan(0);
   });
 });
+
+describe('why this look', async () => {
+  const { pieceReasons, conditionLabel, bodyOrder } = await import('../explain');
+  const deg = (c: number) => `${Math.round(c)}°`;
+  it('explains every piece, in body order, from the weather', () => {
+    const closet = sampleCloset();
+    const s = summarize(scenarioForecast('mixed'), { leave: 8, back: 18 }, 0);
+    const look = pick({ closet, summary: s, today: '2026-11-18' }).hero!;
+    const r = pieceReasons(look.items, s, deg);
+    expect(r.map((x) => x.id)).toEqual(bodyOrder(look.items).map((i) => i.id));
+    expect(r.every((x) => x.text.length > 10)).toBe(true);
+    const outer = look.items.find((i) => i.slot === 'outer');
+    if (outer && s.rainFrom !== null) expect(r.find((x) => x.id === outer.id)!.text).toMatch(/rain from/);
+    expect(conditionLabel(s)).toMatch(/Rain from|Dry/);
+  });
+  it('says hot and dry on a hot day', () => {
+    const s = summarize(scenarioForecast('hot'), { leave: 8, back: 18 }, 0);
+    expect(conditionLabel(s)).toBe('Hot and dry');
+  });
+});

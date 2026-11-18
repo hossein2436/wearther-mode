@@ -1,84 +1,108 @@
 /*
- * Wearther Mode v3 — "Weather toy box".
- * The day's weather mood paints the whole app in one saturated colour. Everything you touch is soft,
- * chunky and a little 3D (clay): cards with a lit top edge, buttons with physical depth, garments with
- * a highlight. Type is Bricolage Grotesque, condensed and heavy for the big moments.
+ * Wearther Mode v4 — "Calm editorial".
+ * Complete replacement for src/theme/tokens.css (v3 "Weather toy box").
+ *
+ * What changed and why
+ * ---------------------
+ * - v3 painted the whole screen in one saturated mood gradient (.scene,
+ *   --canvas at 26% mood). v4 keeps the mood to ONE restrained accent:
+ *   a small weather chip, the hourly curve, the layer-on bar. The canvas
+ *   is warm paper in light mode and near-black in dark mode, in both.
+ * - v3's clay system (lit top edge, 5px bottom edge, mood-tinted drop
+ *   shadow) is gone. One soft shadow, 18px radii, flat 1px hairlines.
+ * - Type: Bricolage Grotesque is replaced by a serif/display face for
+ *   the verdict (Fraunces in the prototype; Georgia fallback) and the
+ *   system sans for everything else. The 84px hero temperature is gone:
+ *   --t-hero is removed and temperatures live in the weather strip at
+ *   body size (see app-v4.css .hero-temp).
+ * - Moods keep the same six names so state/day.ts needs no change, but
+ *   each mood now exposes a single --accent (+ a soft tint) instead of
+ *   a gradient pair. --m1/--m2/--on/--glow/--clay are intentionally
+ *   NOT defined here; anything still referencing them is a v3 leftover
+ *   (grep for --m1, --m2, --clay after applying).
+ *
+ * Kept from v3: the --s1..--s8 spacing scale, --pad, --tabbar-h,
+ * --ease, AA contrast targets, and the light/dark split.
  */
 :root {
   color-scheme: light dark;
-  --font: 'Bricolage Grotesque Variable', 'Bricolage Grotesque', system-ui, -apple-system, sans-serif;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Fraunces Variable", "Fraunces", Georgia, "Times New Roman", serif;
 
-  /* Chrome */
+  /* Chrome — warm paper, not white; near-black, not blue-grey */
   --paper: #ffffff;
-  --paper-2: #f3f2ef;
-  --ink: #15161a;
-  --ink-2: #5b5f68;
-  --ink-3: #9a9ea6;
-  --line: rgb(21 22 26 / 0.08);
-  --love: #ff3d7f;
-  --love-deep: #c81e5b;
-  --danger: #e5402a;
-  --scrim: rgb(10 12 20 / 0.45);
+  --paper-2: #efede7;
+  --art: #fbfaf6;      /* garment art well (tiles, piece rows) */
+  --bg: #f7f5f0;       /* app canvas */
+  --ink: #1b1a17;
+  --ink-2: #6e6a60;
+  --ink-3: #8a8579;
+  --line: rgb(27 26 23 / 0.12);
+  --line-soft: rgb(27 26 23 / 0.07);
+  --love: #c2405a;     /* only ever on the small Love toggle, never a flood */
+  --danger: #c23b2a;
+  --scrim: rgb(10 10 14 / 0.45);
 
-  /* Type */
-  --t-hero: 6rem;      /* 96, temperatures */
-  --t-display: 2.375rem;
-  --t-title: 1.5rem;
-  --t-body: 1.0625rem;
-  --t-small: 0.875rem;
-  --t-micro: 0.75rem;
+  /* Type — verdict is the hero now, temperatures are small */
+  --t-display: 1.9375rem;   /* 31, verdict (serif) */
+  --t-title: 1.3125rem;     /* 21, card headings */
+  --t-body: 1.0625rem;      /* 17 */
+  --t-small: 0.875rem;      /* 14 */
+  --t-micro: 0.75rem;       /* 12 */
+  --t-temp: 0.9375rem;      /* 15, weather-strip temperatures */
 
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 20px; --s6: 24px; --s7: 32px; --s8: 48px;
   --pad: 20px;
-  --r-md: 16px; --r-lg: 26px; --r-xl: 36px; --r-pill: 999px;
+  --r-sm: 12px; --r-md: 16px; --r-lg: 20px; --r-xl: 22px; --r-pill: 999px;
+
+  /* One soft shadow. No clay, no 5px edge, no shine. */
+  --shadow: 0 1px 2px rgb(27 26 23 / 0.05), 0 10px 24px -14px rgb(27 26 23 / 0.22);
+  --shadow-sm: 0 1px 2px rgb(27 26 23 / 0.06);
 
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --bounce: cubic-bezier(0.68, -0.6, 0.32, 1.6);
 
   --tabbar-h: 68px;
   --tabbar-gap: 12px;
 }
 
-/* ---- Weather moods: saturated pairs, each with text that passes AA on both ends ---- */
-.mood-frost { --m1-base: #7b95ff; --m2-base: #b9c9ff; --on-base: #0b1440; --glow: #4b63ff; }
-.mood-rain  { --m1-base: #2a35d8; --m2-base: #3f59ee; --on-base: #ffffff; --glow: #6f86ff; }
-.mood-cool  { --m1-base: #2fbfae; --m2-base: #9ce6d2; --on-base: #04302b; --glow: #11a08f; }
-.mood-mild  { --m1-base: #9bdc5b; --m2-base: #e2f59e; --on-base: #16300a; --glow: #5fae1f; }
-.mood-sun   { --m1-base: #ffc53a; --m2-base: #ffe58c; --on-base: #3a2400; --glow: #ff9d00; }
-.mood-heat  { --m1-base: #ff6b3d; --m2-base: #ffa47a; --on-base: #3a0e00; --glow: #ff3d00; }
+/* ---- Weather moods: ONE restrained accent per mood, used sparingly ----
+   The accent appears in exactly three places: the weather chip on Today,
+   the hourly curve + layer-on bar, and the "Kept" state. Everything else
+   is ink / paper / hairline. Text on the soft tint passes AA in both
+   themes (accent-ink is the darker text variant of the accent). */
+.mood-frost { --accent: #5b7c99; --accent-soft: rgb(91 124 153 / 0.16);  --accent-ink: #405f7a; }
+.mood-rain  { --accent: #3b5bdb; --accent-soft: rgb(59 91 219 / 0.13);   --accent-ink: #2f4ab8; }
+.mood-cool  { --accent: #2e8f80; --accent-soft: rgb(46 143 128 / 0.14);  --accent-ink: #226d62; }
+.mood-mild  { --accent: #6d8f3a; --accent-soft: rgb(109 143 58 / 0.15);  --accent-ink: #4a6226; }
+.mood-sun   { --accent: #b97f24; --accent-soft: rgb(185 127 36 / 0.15);  --accent-ink: #7c5412; }
+.mood-heat  { --accent: #c96a3b; --accent-soft: rgb(201 106 59 / 0.14);  --accent-ink: #934824; }
 
 .app {
-  --m1: var(--m1-base); --m2: var(--m2-base); --on: var(--on-base);
-  --on-2: color-mix(in srgb, var(--on) 92%, transparent);
-  --canvas: color-mix(in srgb, var(--m2) 26%, #f7f6f3);
-  --accent: color-mix(in srgb, var(--m1) 82%, #000);
-  --shadow: color-mix(in srgb, var(--glow) 40%, rgb(20 20 40 / 0.6));
-  --clay:
-    inset 0 2px 0 rgb(255 255 255 / 0.95),
-    inset 0 -5px 0 rgb(0 0 0 / 0.05),
-    0 1px 2px rgb(20 20 40 / 0.06),
-    0 18px 38px -20px var(--shadow);
+  --canvas: var(--bg);
+  background: var(--canvas);
+  color: var(--ink);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #1f2129;
-    --paper-2: #2a2d37;
-    --ink: #f5f5f7;
-    --ink-2: #b4b8c2;
-    --ink-3: #7c818c;
-    --line: rgb(245 245 247 / 0.1);
+    --paper: #1e1e21;
+    --paper-2: #2a2a2e;
+    --art: #26262a;
+    --bg: #121214;
+    --ink: #f5f3ee;
+    --ink-2: #a9a49a;
+    --ink-3: #77726a;
+    --line: rgb(245 243 238 / 0.14);
+    --line-soft: rgb(245 243 238 / 0.07);
+    --love: #e56b8a;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 12px 26px -14px rgb(0 0 0 / 0.6);
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
   }
-  .app {
-    --m1: color-mix(in srgb, var(--m1-base) 62%, #0a0b12);
-    --m2: color-mix(in srgb, var(--m2-base) 42%, #0a0b12);
-    --on: #ffffff;
-    --canvas: color-mix(in srgb, var(--m1-base) 14%, #0d0e13);
-    --accent: var(--m2-base);
-    --clay:
-      inset 0 1.5px 0 rgb(255 255 255 / 0.1),
-      inset 0 -5px 0 rgb(0 0 0 / 0.25),
-      0 18px 38px -20px rgb(0 0 0 / 0.8);
-  }
+  /* Dark mode: accents lighten so the chip and curve stay legible. */
+  .mood-frost { --accent: #8aa8c4; --accent-soft: rgb(138 168 196 / 0.18); --accent-ink: #b3c7da; }
+  .mood-rain  { --accent: #7c93e8; --accent-soft: rgb(124 147 232 / 0.18); --accent-ink: #a9b9f2; }
+  .mood-cool  { --accent: #5fb3a4; --accent-soft: rgb(95 179 164 / 0.18);  --accent-ink: #8fd0c4; }
+  .mood-mild  { --accent: #a3bd6d; --accent-soft: rgb(163 189 109 / 0.18); --accent-ink: #c2d69a; }
+  .mood-sun   { --accent: #d9a94f; --accent-soft: rgb(217 169 79 / 0.18);  --accent-ink: #e8c37f; }
+  .mood-heat  { --accent: #e08a58; --accent-soft: rgb(224 138 88 / 0.18);  --accent-ink: #f0a87e; }
 }

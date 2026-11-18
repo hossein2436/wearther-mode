@@ -10,26 +10,32 @@ import { requestPersistence } from '../state/db';
 import { api, ApiError } from '../api';
 import { restore } from '../state/sync';
 import type { Thermal } from '../types';
-import { useEffect } from 'react';
 import { WeatherGlyph, type GlyphKind } from '../components/WeatherGlyph';
+
+/** Sample pieces shown on the welcome screen, laid out like the real Today stack. */
+const SAMPLE: { kind: Parameters<typeof Garment>[0]['kind']; color: string; w: number; tag: string }[] = [
+  { kind: 'trench', color: '#B49A6C', w: 168, tag: 'Outer' },
+  { kind: 'knit', color: '#7A8B6F', w: 136, tag: 'Warm layer' },
+  { kind: 'jeans', color: '#3E5A7E', w: 124, tag: 'Bottom' },
+  { kind: 'boots', color: '#5C4033', w: 100, tag: 'Shoes' },
+];
 
 export function Welcome() {
   const { d } = useStore();
-  const look: { kind: Parameters<typeof Garment>[0]['kind']; color: string; style: CSSProperties }[] = [
-    { kind: 'trench', color: '#B49A6C', style: { left: '4%', top: '6%', width: '48%', height: '50%', ['--rot' as string]: '-7deg' } },
-    { kind: 'knit', color: '#7A8B6F', style: { left: '42%', top: '0%', width: '44%', height: '44%', ['--rot' as string]: '5deg', animationDelay: '-2s' } },
-    { kind: 'jeans', color: '#3E5A7E', style: { left: '22%', top: '44%', width: '40%', height: '52%', ['--rot' as string]: '-2deg', animationDelay: '-4s' } },
-    { kind: 'boots', color: '#5C4033', style: { left: '60%', top: '62%', width: '30%', height: '30%', ['--rot' as string]: '9deg', animationDelay: '-1s' } },
-  ];
   return (
     <main className="screen welcome">
-      <div className="welcome-sky" aria-hidden="true" />
       <div className="welcome-look" aria-hidden="true">
-        <CyclingGlyph />
-        {look.map((g) => <span key={g.kind} className="float" style={g.style}><Garment kind={g.kind} color={g.color} /></span>)}
+        <div className="body-stack">
+          {SAMPLE.map((g) => (
+            <div key={g.kind} className="body-layer" style={{ ['--w' as string]: `${g.w}px` } as CSSProperties}>
+              <div className="bl-photo"><Garment kind={g.kind} color={g.color} /></div>
+              <span className="bl-tag">{g.tag}</span>
+            </div>
+          ))}
+        </div>
       </div>
       <div className="welcome-panel">
-      <h1>Dressed for the forecast.</h1>
+        <h1>Dressed for the <em>forecast</em>.</h1>
         <p className="t-body">Photograph your clothes once. Every morning, Wearther Mode picks a look from them for the hours you’re actually outside.</p>
         <div className="stack">
           <button className="btn primary lg" onClick={() => d({ type: 'go', route: 'onb-day' })}>Get started</button>
@@ -39,17 +45,6 @@ export function Welcome() {
       </div>
     </main>
   );
-}
-
-const CYCLE: GlyphKind[] = ['sun', 'rain', 'snow', 'partly', 'heat'];
-function CyclingGlyph() {
-  const [i, setI] = useState(0);
-  useEffect(() => {
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const t = setInterval(() => setI((x) => (x + 1) % CYCLE.length), 2600);
-    return () => clearInterval(t);
-  }, []);
-  return <WeatherGlyph key={i} kind={CYCLE[i]} />;
 }
 
 const HOURS = Array.from({ length: 19 }, (_, i) => i + 5);

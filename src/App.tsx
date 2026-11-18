@@ -7,7 +7,6 @@ import { AddScreen } from './screens/AddFlow';
 import { Settings } from './screens/Settings';
 import { useForecast, useServerSync } from './state/sync';
 import { useDay } from './state/day';
-import { ClayDefs } from './components/Garment';
 
 export default function App() {
   const { s } = useStore();
@@ -32,7 +31,6 @@ export default function App() {
   })();
   return (
     <div className={`app mood-${mood}`}>
-      <ClayDefs />
       {screen}
       {main && <TabBar />}
       <Toast />

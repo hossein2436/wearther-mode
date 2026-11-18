@@ -35,8 +35,6 @@ export function Garment({ kind, color }: { kind: GarmentKind; color: string }) {
   return (
     <svg viewBox="0 0 100 100" className="garment" aria-hidden="true">
       <path d={s.body} fill={color} stroke={line} strokeWidth={1.4} strokeLinejoin="round" />
-      <path d={s.body} fill="url(#clay-shade)" />
-      <path d={s.body} fill="none" stroke="url(#clay-rim)" strokeWidth={2.2} strokeLinejoin="round" />
       {s.detail && <path d={s.detail} fill="none" stroke={line} strokeWidth={1.2} strokeLinecap="round" opacity={0.75} />}
     </svg>
   );
@@ -47,24 +45,5 @@ export function ItemVisual({ item }: { item: Item }) {
     <img src={item.photo} alt="" className="garment" draggable={false} />
   ) : (
     <Garment kind={item.kind} color={item.color} />
-  );
-}
-
-/** Shared gradients that give every illustrated garment a soft, lit-from-the-top-left 3D feel. */
-export function ClayDefs() {
-  return (
-    <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
-      <defs>
-        <linearGradient id="clay-shade" x1="0.1" y1="0" x2="0.9" y2="1">
-          <stop offset="0" stopColor="#fff" stopOpacity="0.42" />
-          <stop offset="0.45" stopColor="#fff" stopOpacity="0" />
-          <stop offset="1" stopColor="#000" stopOpacity="0.22" />
-        </linearGradient>
-        <linearGradient id="clay-rim" x1="0" y1="0" x2="0.6" y2="1">
-          <stop offset="0" stopColor="#fff" stopOpacity="0.75" />
-          <stop offset="0.35" stopColor="#fff" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-    </svg>
   );
 }

@@ -2,21 +2,19 @@ import { useState, type CSSProperties } from 'react';
 import { useStore } from '../state/store';
 import type { Item, ItemStatus, Slot } from '../types';
 import { Header, Chip, Sheet } from '../components/ui';
-import { Garment, ItemVisual } from '../components/Garment';
+import { ItemVisual } from '../components/Garment';
 import { Icon } from '../components/Icon';
 import { TagEditor } from './TagEditor';
 import { toOklch } from '../engine/style';
 import { api } from '../api';
 
-const SECTION_ICON: Record<Slot, Item['kind']> = { outer: 'trench', mid: 'knit', top: 'tshirt', onepiece: 'dress', bottom: 'jeans', shoes: 'sneakers' };
-
-const SECTIONS: { slot: Slot; label: string }[] = [
-  { slot: 'outer', label: 'Jackets and coats' },
-  { slot: 'mid', label: 'Warm layers' },
-  { slot: 'top', label: 'Tops' },
-  { slot: 'onepiece', label: 'Dresses' },
-  { slot: 'bottom', label: 'Bottoms' },
-  { slot: 'shoes', label: 'Shoes' },
+const SECTIONS: { slot: Slot; label: string; chip: string }[] = [
+  { slot: 'outer', label: 'Jackets and coats', chip: 'Jackets' },
+  { slot: 'mid', label: 'Warm layers', chip: 'Warm layers' },
+  { slot: 'top', label: 'Tops', chip: 'Tops' },
+  { slot: 'onepiece', label: 'Dresses', chip: 'Dresses' },
+  { slot: 'bottom', label: 'Bottoms', chip: 'Bottoms' },
+  { slot: 'shoes', label: 'Shoes', chip: 'Shoes' },
 ];
 
 /** Dark to light within a section, so the wall reads as a gradient, like a well-hung rail. */
@@ -25,11 +23,15 @@ const byTone = (a: Item, b: Item) => toOklch(a.color).L - toOklch(b.color).L;
 export function Closet() {
   const { s, d } = useStore();
   const [f, setF] = useState<'all' | Slot | 'wash'>('all');
+  const [q, setQ] = useState('');
+  const needle = q.trim().toLowerCase();
+  const hit = (i: Item) => !needle || `${i.name} ${i.kind} ${i.colorName}`.toLowerCase().includes(needle);
   const inWash = s.closet.filter((i) => i.status === 'wash').length;
   const count = (slot: Slot) => s.closet.filter((i) => i.slot === slot).length;
   const sections = f === 'wash'
-    ? [{ slot: null, label: 'In the wash', items: s.closet.filter((i) => i.status === 'wash') }]
-    : SECTIONS.filter((x) => f === 'all' || x.slot === f).map((x) => ({ ...x, items: s.closet.filter((i) => i.slot === x.slot).sort(byTone) }));
+    ? [{ slot: null, label: 'In the wash', items: s.closet.filter((i) => i.status === 'wash' && hit(i)) }]
+    : SECTIONS.filter((x) => f === 'all' || x.slot === f).map((x) => ({ ...x, items: s.closet.filter((i) => i.slot === x.slot && hit(i)).sort(byTone) }));
+  const shown = sections.reduce((n, x) => n + x.items.length, 0);
 
   return (
     <main className="screen has-tabs">
@@ -38,11 +40,17 @@ export function Closet() {
         {s.closet.length} {s.closet.length === 1 ? 'piece' : 'pieces'}{inWash ? `, ${inWash} in the wash` : ''}
       </p>
 
+      {s.closet.length > 0 && (
+        <div className="search-wrap">
+          <input type="search" placeholder="Search your closet" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search your closet" />
+        </div>
+      )}
+
       <div className="chips scroll" role="toolbar" aria-label="Show">
         <Chip on={f === 'all'} onClick={() => setF('all')}>All</Chip>
         {SECTIONS.filter((x) => count(x.slot)).map((x) => (
           <Chip key={x.slot} on={f === x.slot} onClick={() => setF(x.slot)}>
-            <Garment kind={SECTION_ICON[x.slot]} color={f === x.slot ? '#ffffff' : '#9aa0aa'} />{x.label} <span className="count">{count(x.slot)}</span>
+            {x.chip} <span className="count">{count(x.slot)}</span>
           </Chip>
         ))}
         {inWash > 0 && <Chip on={f === 'wash'} onClick={() => setF('wash')}>In the wash <span className="count">{inWash}</span></Chip>}
@@ -60,6 +68,8 @@ export function Closet() {
           <p className="t-small muted">Add the things you wear most. Fifteen pieces is plenty to start.</p>
           <button className="btn primary" onClick={() => d({ type: 'go', route: 'add' })}>Add clothes</button>
         </section>
+      ) : shown === 0 ? (
+        <p className="empty-note t-small muted">Nothing matches that. Try another word or filter.</p>
       ) : (
         sections.filter((x) => x.items.length).map((x) => (
           <section key={x.label} className="stack" aria-label={x.label}>
@@ -70,7 +80,7 @@ export function Closet() {
                   <button
                     className={`tile${i.status !== 'available' ? ' is-away' : ''}`}
                     onClick={() => d({ type: 'go', route: 'item', itemId: i.id })}
-                    aria-label={`${i.name}${i.status === 'wash' ? ', in the wash' : i.status === 'stored' ? ', stored' : ''}`}
+                    aria-label={`${i.name}${i.status === 'wash' ? ', in the wash' : i.status === 'stored' ? ', stored' : ''}, worn ${i.wearCount} ${i.wearCount === 1 ? 'time' : 'times'}`}
                   >
                     <span className="tile-art" style={{ ['--tint' as string]: i.color } as CSSProperties}>
                       <ItemVisual item={i} />
@@ -78,6 +88,7 @@ export function Closet() {
                       {i.status === 'stored' && <span className="tile-flag">Stored</span>}
                     </span>
                     <span className="tile-name">{i.name}</span>
+                    <span className="tile-meta">Worn {i.wearCount} {i.wearCount === 1 ? 'time' : 'times'}</span>
                   </button>
                 </li>
               ))}
