@@ -1,0 +1,352 @@
+/* Wearther Mode v4 — "Calm editorial". Complete replacement for src/theme/app.css (v3).
+ *
+ * STRUCTURAL CHANGES NEEDED in the TSX (see REDESIGN.md for the full list):
+ *  1. Today.tsx — move the verdict ABOVE the outfit (hierarchy: place line >
+ *     verdict > outfit > why > hourly). Delete the .hero temperature block
+ *     (84px .t-hero) and the <Scene mood> full-screen gradient; replace with
+ *     the small .weather-strip (mood chip + small temps).
+ *  2. Today.tsx — replace <LookDeck> + its scattered diagonal collage with
+ *     .outfit-stack: one .piece-row per item, ordered outer > mid > top >
+ *     bottom > shoes (see FlatLay.tsx: render rows instead of absolute
+ *     positioned .piece elements).
+ *  3. Today.tsx — replace the .hours capsule row with .hour-curve (one inline
+ *     SVG sparkline, shaded rain window, .layer-bar underneath) and replace
+ *     the .actions-dock 3-circle layout (X circle / Wear / pink heart circle)
+ *     with one full-width .btn.primary + a .actions-quiet row (Shuffle, Love).
+ *  4. Closet.tsx — shorten the filter chip labels (see .chips.scroll: labels
+ *     are short words + counts, no garment icons) and show wear counts on
+ *     tiles (.tile-meta). The wall stays 3 columns on wide phones, 2 on
+ *     narrow ones.
+ *  5. Delete: Scene.tsx / Sky.tsx usage on Today, confettiFrom() in the wear
+ *     handler, .tab-blob, .stamp, .heart-burst, .glare, .look-count.
+ *     The .scene, .deck, .look, .piece (absolute), .hour, .round, .stamp
+ *     rules below are kept only as harmless leftovers for screens not yet
+ *     migrated — remove them once Onboarding/Sheets are restyled.
+ */
+
+/* ---------- Base ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+body { margin: 0; font-family: var(--font); font-size: var(--t-body); line-height: 1.45; color: var(--ink); background: #e7e3db; -webkit-font-smoothing: antialiased; }
+h1, h2, h3, p, figure { margin: 0; }
+button, input, select { font: inherit; color: inherit; }
+img { max-width: 100%; display: block; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 10px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- Type ---------- */
+.t-display { font-family: var(--font-display); font-size: var(--t-display); line-height: 1.12; font-weight: 640; letter-spacing: -0.01em; text-wrap: balance; }
+.t-title { font-size: var(--t-title); line-height: 1.15; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
+.t-body { font-size: var(--t-body); }
+.t-small { font-size: var(--t-small); line-height: 1.4; }
+.t-micro { font-size: var(--t-micro); line-height: 1.3; font-weight: 600; }
+.muted { color: var(--ink-2); }
+.faint { color: var(--ink-3); }
+.center { text-align: center; }
+
+/* ---------- Shell ---------- */
+.app { max-width: 430px; margin: 0 auto; min-height: 100dvh; position: relative; isolation: isolate; background: var(--canvas); color: var(--ink); }
+.screen { padding: calc(env(safe-area-inset-top) + var(--s6)) var(--pad) var(--s8); display: flex; flex-direction: column; gap: var(--s5); }
+.screen.has-tabs { padding-bottom: calc(var(--tabbar-h) + var(--tabbar-gap) * 2 + env(safe-area-inset-bottom) + var(--s6)); }
+.head { display: flex; align-items: center; gap: var(--s3); min-height: 48px; }
+.head .t-display, .head .t-title { flex: 1; min-width: 0; }
+.head-sub { margin-top: calc(-1 * var(--s3)); color: var(--ink-2); }
+.stack { display: flex; flex-direction: column; gap: var(--s3); }
+.row { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; }
+
+/* ---------- Surfaces: flat paper, one soft shadow, hairline borders ---------- */
+.card { background: var(--paper); border: 1px solid var(--line-soft); border-radius: var(--r-lg); box-shadow: var(--shadow-sm); }
+.card { padding: var(--s5); display: flex; flex-direction: column; gap: var(--s3); }
+
+/* ---------- Buttons: flat, no 5px edge, no shine sweep ---------- */
+.btn {
+  position: relative; min-height: 54px; padding: 0 var(--s6); border-radius: var(--r-pill); border: 0;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
+  font-weight: 700; font-size: 1.0625rem; letter-spacing: -0.01em; white-space: nowrap; cursor: pointer;
+  background: var(--paper); color: var(--ink); border: 1px solid var(--line);
+  transition: transform 120ms var(--ease), background-color 160ms;
+}
+.btn:active:not(:disabled) { transform: scale(0.98); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn.primary { background: var(--ink); color: var(--paper); border-color: transparent; }
+@media (prefers-color-scheme: dark) { .btn.primary { background: #f5f3ee; color: #121214; } }
+.btn.primary.is-done { background: transparent; color: var(--ink); border: 1.5px solid var(--line); box-shadow: none; }
+.btn.secondary { background: var(--paper); }
+.btn.quiet { background: transparent; border-color: transparent; color: var(--ink-2); min-height: 44px; font-weight: 650; box-shadow: none; }
+.btn.danger { background: var(--danger); color: #fff; border-color: transparent; }
+.btn.danger-quiet { background: transparent; border-color: transparent; color: var(--danger); min-height: 44px; font-weight: 700; }
+.btn.block { width: 100%; }
+.btn.lg { min-height: 60px; font-size: 1.125rem; }
+.icon-btn { width: 44px; height: 44px; border-radius: 50%; border: 0; background: transparent; color: inherit; display: inline-grid; place-items: center; cursor: pointer; flex: none; }
+.link { background: none; border: 0; padding: 0; min-height: 44px; color: var(--accent-ink); font-weight: 700; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---------- Chips, segments ----------
+   v3 chips carried a garment icon + long label ("Jackets and coats") and
+   truncated off-screen. v4: short label + count, horizontally scrollable. */
+.chips { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.chips.scroll { flex-wrap: nowrap; overflow-x: auto; margin: 0 calc(-1 * var(--pad)); padding: 4px var(--pad) 10px; scrollbar-width: none; }
+.chips.scroll::-webkit-scrollbar { display: none; }
+.chip {
+  min-height: 44px; padding: 0 16px; border-radius: var(--r-pill); border: 1px solid var(--line); cursor: pointer;
+  background: var(--paper); font-size: var(--t-small); font-weight: 650; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 6px; transition: background-color 160ms, color 160ms;
+}
+.chip:active { transform: scale(0.96); }
+.chip[aria-pressed='true'] { background: var(--ink); color: var(--paper); border-color: transparent; }
+@media (prefers-color-scheme: dark) { .chip[aria-pressed='true'] { background: #f5f3ee; color: #121214; } }
+.chip .count { opacity: 0.55; font-variant-numeric: tabular-nums; }
+.seg { position: relative; display: flex; padding: 5px; gap: 4px; border-radius: var(--r-pill); background: var(--paper-2); }
+.seg button { flex: 1; min-height: 44px; border: 0; border-radius: var(--r-pill); background: transparent; cursor: pointer; font-size: var(--t-small); font-weight: 700; color: var(--ink-2); transition: background-color 200ms var(--ease), color 200ms; }
+.seg button[aria-checked='true'], .seg button[aria-pressed='true'] { background: var(--paper); color: var(--ink); box-shadow: var(--shadow-sm); }
+
+/* ---------- Forms ---------- */
+.field { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
+.field > span { font-size: var(--t-small); font-weight: 700; color: var(--ink-2); }
+.field input, .field select { min-height: 56px; padding: 0 18px; border-radius: var(--r-md); border: 1px solid var(--line); width: 100%; background: var(--paper); color: var(--ink); font-size: var(--t-body); font-weight: 560; }
+.group { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--s3); min-width: 0; }
+.group > legend { padding: 0; margin-bottom: var(--s3); font-size: var(--t-small); font-weight: 760; }
+.note { padding: var(--s3) var(--s4); border-radius: var(--r-md); background: var(--accent-soft); font-size: var(--t-small); font-weight: 560; }
+.note.alert { background: rgb(194 59 42 / 0.12); }
+
+/* ---------- Tab bar: minimal, translucent, active pill + filled icon ----------
+   Fixes design-review #1: the active tab is no longer colour-only. The pill
+   background, the filled icon and the bolder label all mark it together.
+   The v3 liquid blob (.tab-blob) is deleted. */
+.tabbar {
+  position: fixed; z-index: 20; left: 50%; transform: translateX(-50%);
+  bottom: 0; width: min(430px, 100%); padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+  background: rgb(255 255 255 / 0.88); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  border-top: 1px solid var(--line-soft);
+}
+@media (prefers-color-scheme: dark) { .tabbar { background: rgb(30 30 33 / 0.9); } }
+.tab { min-height: 56px; border: 0; border-radius: 16px; background: transparent; cursor: pointer; color: var(--ink-2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 11px; font-weight: 650; }
+.tab .ic-fill { display: none; }
+.tab[aria-current='page'] { background: rgb(27 26 23 / 0.08); color: var(--ink); font-weight: 800; }
+@media (prefers-color-scheme: dark) { .tab[aria-current='page'] { background: rgb(245 243 238 / 0.12); } }
+.tab[aria-current='page'] .ic-line { display: none; }
+.tab[aria-current='page'] .ic-fill { display: block; }
+
+/* ---------- Sheet, toast ---------- */
+.scrim { position: fixed; inset: 0; z-index: 40; background: var(--scrim); display: flex; align-items: flex-end; justify-content: center; animation: fade 240ms; -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+.sheet { color: var(--ink); width: 100%; max-width: 430px; max-height: 92dvh; overflow: auto; background: var(--paper); border-radius: var(--r-xl) var(--r-xl) 0 0; padding: var(--s3) var(--pad) calc(var(--s6) + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: var(--s4); animation: sheet-up 300ms var(--ease); box-shadow: var(--shadow); }
+.sheet:focus { outline: none; }
+/* Design-review #2: the handle is decorative only — sheets close via the
+   scrim, the Close button or Escape. Do not re-add a drag handle affordance
+   without implementing drag-to-dismiss. */
+.sheet-handle { width: 40px; height: 5px; border-radius: 3px; background: var(--line); align-self: center; }
+.sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s3); padding-top: var(--s2); }
+@keyframes sheet-up { from { transform: translateY(40px); opacity: 0.6; } }
+@keyframes fade { from { opacity: 0; } }
+@keyframes rise { from { transform: translateY(12px); opacity: 0; } }
+.toast-region { position: fixed; left: 0; right: 0; z-index: 50; pointer-events: none; display: flex; justify-content: center; bottom: calc(env(safe-area-inset-bottom) + var(--tabbar-h) + var(--tabbar-gap) * 2); }
+.toast { background: var(--ink); color: var(--paper); padding: 13px 20px; border-radius: var(--r-pill); font-size: var(--t-small); font-weight: 700; box-shadow: 0 14px 30px -10px rgb(0 0 0 / 0.5); animation: toast-in 300ms var(--ease); }
+@keyframes toast-in { from { transform: translateY(12px); opacity: 0; } }
+
+/* =========================================================
+   TODAY — calm editorial. Hierarchy:
+   1. place line  2. verdict (serif headline)  3. outfit stack
+   4. why it works  5. hourly curve  6. one primary action.
+   The v3 full-screen mood gradient (.scene) and the 84px hero
+   temperature are deleted; temperatures live in .weather-strip.
+   ========================================================= */
+.today { gap: var(--s3); padding-top: calc(env(safe-area-inset-top) + var(--s4)); }
+.today.has-dock { padding-bottom: calc(env(safe-area-inset-bottom) + var(--tabbar-h) + var(--tabbar-gap) * 2 + 96px); }
+
+.place-line { font-size: var(--t-small); color: var(--ink-2); font-weight: 600; }
+.place-line b { color: var(--ink); font-weight: 700; }
+
+/* Scenario switcher (prototype control in the v4 file; in the real app this
+   is the demo-only switcher already in Settings.tsx). */
+.scen-pills { display: flex; gap: var(--s2); overflow-x: auto; margin: 0 calc(-1 * var(--pad)); padding: 2px var(--pad) 6px; scrollbar-width: none; }
+.scen-pills::-webkit-scrollbar { display: none; }
+.pill-btn { flex: none; min-height: 44px; padding: 0 16px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--paper); font-size: var(--t-small); font-weight: 650; cursor: pointer; }
+.pill-btn[aria-pressed='true'] { background: var(--ink); color: var(--paper); border-color: transparent; }
+
+/* Weather strip: the mood's ONE restrained appearance (chip) + small temps. */
+.weather-strip { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mood-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 12px; border-radius: var(--r-pill); background: var(--accent-soft); color: var(--accent-ink); font-size: 13px; font-weight: 700; }
+.temp-line { font-size: var(--t-temp); font-weight: 650; font-variant-numeric: tabular-nums; }
+.temp-line span { color: var(--ink-2); font-weight: 500; }
+
+.verdict { font-family: var(--font-display); font-size: var(--t-display); line-height: 1.14; font-weight: 640; letter-spacing: -0.01em; text-wrap: balance; margin-top: var(--s2); }
+.verdict em { font-style: normal; color: var(--accent-ink); }
+
+/* Look pager: dots + prev/next. No deck, no drag, no tilt. */
+.look-meta { display: flex; align-items: center; justify-content: space-between; margin-top: var(--s3); }
+.look-of { font-size: 13px; font-weight: 700; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.look-nav { display: flex; align-items: center; gap: 4px; }
+.look-nav .dots { display: flex; gap: 6px; margin: 0 8px; }
+.look-nav .dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line); transition: all 200ms; }
+.look-nav .dots i.on { width: 20px; border-radius: 4px; background: var(--ink); }
+.nav-arrow { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--line); background: var(--paper); font-size: 18px; line-height: 1; cursor: pointer; }
+.nav-arrow:active { transform: scale(0.94); }
+
+/* ---------- Outfit stack (NEW in v4) ----------
+   Replaces the v3 LookDeck: no absolute positioning, no diagonal scatter,
+   no idle float, no pointer tilt. A vertical flat-lay, centred and aligned
+   like a person: outer on top, then mid, then top, then bottom, shoes last.
+   Each piece is its own clean white card row: garment art, name + role,
+   and a pin button. Tapping a piece toggles .is-kept (pin badge + "Kept"). */
+.outfit-stack { display: flex; flex-direction: column; gap: 10px; margin-top: var(--s3); }
+.piece-row { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: var(--paper); border: 1px solid var(--line-soft); border-radius: 18px; padding: 10px 12px; box-shadow: var(--shadow-sm); cursor: pointer; }
+.piece-row:active { transform: scale(0.985); }
+.piece-art { width: 64px; height: 64px; flex: none; border-radius: 12px; background: var(--art); display: grid; place-items: center; overflow: hidden; }
+.piece-art svg, .piece-art .garment { width: 56px; height: 56px; }
+.piece-info { flex: 1; min-width: 0; }
+.piece-info .nm { display: block; font-size: 15px; font-weight: 700; line-height: 1.25; }
+.piece-info .rl { display: block; font-size: 12.5px; color: var(--ink-2); margin-top: 2px; }
+.kept-tag { display: none; font-size: 11px; font-weight: 800; color: var(--accent-ink); background: var(--accent-soft); border-radius: var(--r-pill); padding: 3px 8px; margin-top: 5px; }
+.piece-row.is-kept .kept-tag { display: inline-block; }
+.pin-btn { width: 44px; height: 44px; flex: none; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; color: var(--ink-2); background: var(--paper); }
+.pin-btn[aria-pressed='true'], .piece-row.is-kept .pin-btn { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
+
+/* Why it works — plain text under the outfit, not a black pill on the card. */
+.why { font-size: var(--t-small); font-weight: 500; color: var(--ink-2); line-height: 1.5; max-width: 60ch; }
+.why b, .why .why-label { color: var(--ink); font-weight: 700; }
+.why .why-label { display: block; font-size: 11.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 3px; }
+.note { margin-top: var(--s2); }
+
+/* ---------- Hourly curve (NEW in v4) ----------
+   Replaces the v3 .hours row of 7 overflowing capsules. One SVG sparkline
+   (08:00–18:00, feels-like), a shaded rain window, tappable points
+   (.hour-point, 28px hit area) and the layer-on bar underneath. */
+.hour-card { background: var(--paper); border: 1px solid var(--line-soft); border-radius: var(--r-lg); padding: 16px; box-shadow: var(--shadow-sm); }
+.hour-card h3 { font-size: 13px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); }
+.hour-curve { margin-top: 6px; }
+.hour-curve svg { width: 100%; height: auto; display: block; }
+.hour-curve .hour-point { cursor: pointer; }
+.hour-read { font-size: var(--t-small); font-weight: 650; margin-top: 10px; font-variant-numeric: tabular-nums; }
+.hour-read span { color: var(--ink-2); font-weight: 500; }
+.layer-bar { margin-top: 12px; }
+.layer-bar .lb-track { height: 8px; border-radius: 4px; background: var(--paper-2); position: relative; overflow: hidden; }
+.layer-bar .lb-fill { position: absolute; inset: 0; background: var(--accent); border-radius: 4px; }
+.layer-bar .lb-fill.none { background: repeating-linear-gradient(-45deg, var(--ink-3) 0 6px, transparent 6px 12px); opacity: 0.55; }
+.layer-bar p { font-size: 13px; color: var(--ink-2); margin-top: 8px; }
+.layer-bar p b { color: var(--ink); }
+
+/* ---------- Actions: ONE primary + a quiet row ----------
+   Replaces the v3 .actions-dock (X circle / Wear / pink heart circle).
+   No confetti, no stamp, no heart burst: Wear shows a calm "Worn today ✓"
+   state (.is-done) and a toast. */
+.actions { display: flex; flex-direction: column; gap: 10px; margin-top: var(--s2); }
+.actions .btn.primary { width: 100%; min-height: 56px; font-size: 1.0625rem; }
+.actions-quiet { display: flex; gap: 10px; }
+.btn-quiet { flex: 1; min-height: 48px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--paper); font-size: 15px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 7px; cursor: pointer; }
+.btn-quiet[aria-pressed='true'] { border-color: var(--love); color: var(--love); }
+.btn-quiet[aria-pressed='true'] svg { fill: var(--love); stroke: var(--love); }
+
+.banner { display: flex; align-items: center; gap: var(--s3); justify-content: space-between; padding: var(--s3) var(--s3) var(--s3) var(--s5); border-radius: var(--r-md); background: var(--ink); color: var(--paper); font-size: var(--t-small); font-weight: 700; }
+.banner .btn { min-height: 42px; padding: 0 var(--s4); font-size: var(--t-small); box-shadow: none; border-color: transparent; }
+.attribution { font-size: var(--t-micro); font-weight: 600; color: var(--ink-3); text-align: center; }
+.empty-state { display: flex; flex-direction: column; gap: var(--s3); padding: var(--s6) 0; }
+
+/* =========================================================
+   CLOSET — clean white cards, short filters, wear counts
+   ========================================================= */
+.search-wrap input { width: 100%; min-height: 52px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--paper); padding: 0 18px 0 44px; font-size: 16px; }
+.wall { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s4) var(--s3); }
+@media (max-width: 380px) { .wall { grid-template-columns: repeat(2, 1fr); } }
+.tile { width: 100%; border: 1px solid var(--line-soft); padding: 12px; background: var(--paper); border-radius: var(--r-lg); box-shadow: var(--shadow-sm); cursor: pointer; text-align: left; display: flex; flex-direction: column; gap: 8px; color: inherit; }
+.tile:active { transform: scale(0.97); }
+.tile-art { aspect-ratio: 4 / 5; border-radius: var(--r-md); display: grid; place-items: center; padding: 14%; position: relative; background: var(--art); overflow: hidden; }
+.tile-art .garment { position: relative; width: 100%; height: 100%; object-fit: contain; }
+.tile-name { font-size: var(--t-micro); font-weight: 700; line-height: 1.2; padding: 0 4px; }
+/* NEW in v4: wear count under the name, so the closet reads as "what I wear". */
+.tile-meta { font-size: 12.5px; color: var(--ink-2); padding: 0 4px; font-variant-numeric: tabular-nums; }
+.tile.is-away .tile-art .garment { opacity: 0.35; filter: grayscale(0.8); }
+.tile-flag { position: absolute; left: 8px; bottom: 8px; font-size: 10.5px; font-weight: 800; padding: 4px 9px; border-radius: var(--r-pill); background: var(--ink); color: var(--paper); }
+.wall-section { font-size: var(--t-title); font-weight: 700; letter-spacing: -0.01em; display: flex; justify-content: space-between; align-items: baseline; margin-top: var(--s2); }
+.wall-section span { font-size: var(--t-small); color: var(--ink-2); font-weight: 700; }
+
+.detail-hero { margin: calc(-1 * (env(safe-area-inset-top) + var(--s6))) calc(-1 * var(--pad)) 0; padding: calc(env(safe-area-inset-top) + var(--s3)) var(--pad) var(--s7); display: flex; flex-direction: column; gap: var(--s3); position: relative; overflow: hidden; border-radius: 0 0 var(--r-xl) var(--r-xl); background: var(--paper-2); color: var(--ink); border-bottom: 1px solid var(--line-soft); }
+.detail-art { height: 250px; display: grid; place-items: center; }
+.detail-art .garment { height: 100%; width: auto; max-width: 80%; object-fit: contain; }
+.stats { display: flex; gap: var(--s3); }
+.stat { flex: 1; display: flex; flex-direction: column; padding: var(--s3) var(--s4); border-radius: var(--r-md); background: var(--paper); border: 1px solid var(--line-soft); }
+.stat strong { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1; }
+.stat span { font-size: var(--t-micro); font-weight: 650; opacity: 0.75; }
+.dock-save { position: sticky; bottom: calc(env(safe-area-inset-bottom) + var(--tabbar-h) + var(--tabbar-gap) * 2); z-index: 5; display: flex; flex-direction: column; padding: var(--s6) 0 var(--s2); background: linear-gradient(to bottom, transparent, var(--canvas) var(--s5)); }
+
+/* =========================================================
+   ADD — same capture flow, quieter surfaces
+   ========================================================= */
+.capture { border-radius: var(--r-lg); background: var(--paper); border: 1px solid var(--line-soft); box-shadow: var(--shadow-sm); padding: var(--s6) var(--s5) var(--s5); display: flex; flex-direction: column; gap: var(--s5); position: relative; overflow: hidden; }
+.capture-art { height: 150px; position: relative; }
+.capture-art .float { position: absolute; width: 118px; height: 118px; top: 18px; }
+.capture-art .float:nth-child(1) { left: calc(50% - 150px); }
+.capture-art .float:nth-child(2) { left: calc(50% - 60px); top: 0; z-index: 1; }
+.capture-art .float:nth-child(3) { left: calc(50% + 32px); }
+.capture-art .garment { width: 100%; height: 100%; }
+.tips { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s2); position: relative; }
+.tips li { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; font-size: var(--t-micro); color: var(--ink-2); font-weight: 650; }
+.tips li span { width: 44px; height: 44px; border-radius: 15px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-ink); }
+.working { display: flex; align-items: center; gap: var(--s3); font-size: var(--t-small); font-weight: 700; }
+.spinner { width: 20px; height: 20px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); animation: spin 0.8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.tagcard { border-radius: var(--r-lg); background: var(--paper); border: 1px solid var(--line-soft); box-shadow: var(--shadow-sm); overflow: hidden; display: flex; flex-direction: column; outline: none; animation: rise 300ms var(--ease); }
+.tag-photo { position: relative; height: 210px; display: grid; place-items: center; background: var(--paper-2); }
+.tag-photo .garment { height: 82%; width: auto; max-width: 70%; object-fit: contain; }
+.tag-left { position: absolute; top: 14px; left: 14px; font-size: var(--t-micro); font-weight: 800; padding: 6px 12px; border-radius: var(--r-pill); background: var(--ink); color: var(--paper); }
+.tag-body { padding: var(--s5); display: flex; flex-direction: column; gap: var(--s5); }
+.families { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s2); }
+.family { position: relative; border: 0; border-radius: var(--r-md); padding: 12px 6px 10px; background: var(--paper-2); cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: var(--t-micro); font-weight: 700; color: var(--ink); }
+.family .garment { width: 44px; height: 44px; }
+.family[aria-pressed='true'] { background: var(--paper); box-shadow: inset 0 0 0 2px var(--ink); }
+.kinds { display: flex; flex-wrap: wrap; gap: var(--s2); animation: rise 260ms var(--ease); }
+.swatch-row { display: flex; align-items: center; gap: var(--s3); }
+.swatch { width: 50px; height: 50px; border-radius: 50%; overflow: hidden; position: relative; flex: none; cursor: pointer; }
+.swatch input { position: absolute; inset: -10px; width: 70px; height: 70px; border: 0; padding: 0; cursor: pointer; background: none; }
+.swatch-row strong { font-weight: 700; font-size: 1.0625rem; }
+
+/* =========================================================
+   SETTINGS — flat list rows, ink icon chips (no gradient squircles)
+   ========================================================= */
+.list { background: var(--paper); border: 1px solid var(--line-soft); border-radius: var(--r-lg); box-shadow: var(--shadow-sm); overflow: hidden; padding: 4px 0; }
+.list-row { display: flex; align-items: center; gap: var(--s3); padding: 10px var(--s4); min-height: 62px; }
+.list-row + .list-row { border-top: 1.5px solid var(--line-soft); }
+.list-row.tap { width: 100%; border-left: 0; border-right: 0; border-bottom: 0; background: none; text-align: left; cursor: pointer; color: inherit; }
+.list-row.tap:first-child { border-top: 0; }
+.list-row.tap:active { background: var(--paper-2); }
+.list-row.tap.danger { color: var(--danger); }
+.list-row > svg:last-child { color: var(--ink-3); }
+.list-row > .label { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.list-row > .label strong { font-weight: 700; font-size: 0.9875rem; }
+.list-row > .label small { font-size: var(--t-micro); color: var(--ink-2); font-weight: 560; }
+.list-row select, .list-row input:not(.toggle) { border: 1px solid var(--line); background: var(--paper-2); border-radius: 12px; min-height: 42px; padding: 0 12px; font-size: var(--t-small); font-weight: 700; color: var(--ink); }
+.list-row .btn { min-height: 42px; padding: 0 var(--s4); font-size: var(--t-small); }
+.row-icon { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; flex: none; color: var(--ink); background: var(--paper-2); }
+.list-head { font-size: var(--t-title); font-weight: 700; letter-spacing: -0.01em; margin: var(--s3) var(--s1) calc(-1 * var(--s2)); }
+.toggle { appearance: none; -webkit-appearance: none; width: 54px; height: 32px; border-radius: 999px; background: var(--paper-2); border: 1px solid var(--line); position: relative; cursor: pointer; flex: none; transition: background-color 200ms; margin: 0; }
+.toggle::after { content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 2px 5px rgb(0 0 0 / 0.25); transition: transform 220ms var(--ease); }
+.toggle:checked { background: var(--accent); border-color: transparent; }
+.toggle:checked::after { transform: translateX(22px); }
+.taste-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.taste-tag { font-size: var(--t-micro); font-weight: 700; padding: 6px 11px; border-radius: var(--r-pill); background: var(--accent-soft); color: var(--accent-ink); }
+.taste-tag.no { background: var(--paper-2); color: var(--ink-2); text-decoration: line-through; }
+.proto { background: var(--accent-soft); border-radius: var(--r-lg); padding: var(--s4); display: flex; flex-direction: column; gap: var(--s3); }
+
+/* Paywall */
+.pay-hero { padding: var(--s5); border-radius: var(--r-md); background: var(--ink); color: var(--paper); display: flex; align-items: center; gap: var(--s3); }
+.timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.timeline li { display: grid; grid-template-columns: 36px 1fr; gap: var(--s3); position: relative; padding-bottom: var(--s4); }
+.timeline li:not(:last-child)::before { content: ''; position: absolute; left: 16px; top: 38px; bottom: 2px; width: 4px; border-radius: 2px; background: var(--paper-2); }
+.timeline li.is-past:not(:last-child)::before { background: var(--ink); }
+.timeline .dot { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--paper-2); font-weight: 800; font-size: var(--t-small); }
+.timeline .is-past .dot { background: var(--ink); color: var(--paper); }
+.timeline .is-now .dot { background: var(--accent); color: #fff; box-shadow: 0 0 0 5px var(--accent-soft); }
+.timeline strong { display: block; font-weight: 800; }
+.timeline span { font-size: var(--t-small); color: var(--ink-2); }
+.plans { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); }
+.plan { text-align: left; border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--s4); background: var(--paper-2); cursor: pointer; display: flex; flex-direction: column; gap: 2px; position: relative; color: var(--ink); }
+.plan[aria-checked='true'] { background: var(--paper); box-shadow: inset 0 0 0 2px var(--ink); }
+.plan-name { font-size: var(--t-small); font-weight: 800; }
+.plan-price { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.02em; }
+.plan-note { font-size: var(--t-micro); color: var(--ink-2); font-weight: 600; }
+.plan-flag { position: absolute; top: -10px; right: 10px; font-size: 11px; font-weight: 800; padding: 4px 9px; border-radius: var(--r-pill); background: var(--love); color: #fff; }
+
+/* ---------- Motion preferences ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+}
+@media (min-width: 560px) { .app { box-shadow: 0 0 0 1px var(--line-soft); } }
